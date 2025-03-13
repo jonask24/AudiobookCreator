@@ -42,3 +42,6 @@ build/
 /workspace.xml
 ChatHistory_schema*.xml
 firebender.json
+build-linux.sh
+build-windows.bat
+create_deb_package.sh
