@@ -1,0 +1,255 @@
+/*
+ * Dark Theme Stylesheet for Audiobook Creator
+ * 
+ * This stylesheet defines the visual appearance of the application in dark mode,
+ * providing a modern dark interface with appropriate contrast and subtle highlights.
+ * 
+ * Color Palette:
+ * - Background: #222222 (dark gray)
+ * - Container backgrounds: #333333, #2a2a2a (darker grays)
+ * - Borders: #444444, #555555 (medium grays)
+ * - Text: #e9ecef (off-white)
+ * - Accent: #0d6efd (blue)
+ */
+
+/* Base application styles */
+.root {
+    -fx-base: #333333;                     /* Base color for controls */
+    -fx-background-color: #222222;         /* Main window background */
+    -fx-control-inner-background: #333333; /* Background for control interiors */
+    -fx-accent: #0d6efd;                   /* Accent color for selections */
+    -fx-focus-color: #0d6efd;              /* Focus indicator color */
+    -fx-text-fill: #e9ecef;                /* Default text color - light gray */
+}
+
+/* Standard button styling */
+.button {
+    -fx-background-color: #444444;         /* Button background - medium gray */
+    -fx-text-fill: #e9ecef;                /* Button text - light gray */
+    -fx-border-color: #555555;             /* Button border - slightly lighter gray */
+    -fx-border-radius: 4px;                /* Rounded corners */
+    -fx-background-radius: 4px;            /* Match border radius */
+}
+
+/* Button hover effect */
+.button:hover {
+    -fx-background-color: #555555;         /* Lighter gray on hover */
+}
+
+/* Primary action button styling */
+.primary-button {
+   -fx-background-color: #0d6efd;          /* Blue background */
+   -fx-text-fill: white;                   /* White text for contrast */
+   -fx-font-weight: bold;                  /* Bold text for emphasis */
+}
+
+/* Primary button hover effect */
+.primary-button:hover {
+   -fx-background-color: #0b5ed7;          /* Darker blue on hover */
+}
+
+/* List view container */
+.list-view {
+    -fx-background-color: #333333;         /* Dark gray background */
+    -fx-border-color: #555555;             /* Medium gray border */
+}
+
+/* Individual list items */
+.list-cell {
+    -fx-background-color: #333333;         /* Match list view background */
+    -fx-text-fill: #e9ecef;                /* Light gray text */
+}
+
+/* Selected list item */
+.list-cell:selected {
+    -fx-background-color: #0d6efd;         /* Blue selection background */
+    -fx-text-fill: #ffffff;                /* White text for contrast */
+}
+
+/* Progress bar (default style) */
+.progress-bar {
+   -fx-accent: #0d6efd;                    /* Blue color for progress */
+   -fx-border-color: #666666;              /* Medium gray border */
+   -fx-border-width: 1px;
+   -fx-border-radius: 3px;
+}
+
+/* Progress bar filled section */
+.progress-bar > .bar {
+   -fx-background-color: #0d6efd;          /* Blue bar */
+   -fx-background-insets: 1 1 1 1;         /* Inset from the border */
+   -fx-padding: 0.5em;                     /* Bar height */
+   -fx-background-radius: 2;               /* Slightly rounded bar */
+}
+
+/* Progress bar empty section */
+.progress-bar > .track {
+   -fx-background-color: #555555;          /* Medium gray track */
+   -fx-background-radius: 2;               /* Rounded track */
+   -fx-border-radius: 2;
+}
+
+/* Blue progress bar for processing items */
+.blue-bar {
+   -fx-accent: #1E90FF;                    /* Brighter blue */
+   -fx-border-color: #666666;              /* Medium gray border */
+   -fx-border-width: 1px;
+   -fx-border-radius: 3px;
+}
+
+.blue-bar > .bar {
+   -fx-background-color: #1E90FF;          /* Match accent color */
+   -fx-background-insets: 1;
+   -fx-background-radius: 2;
+   -fx-padding: 1em;                       /* Taller bar */
+}
+
+.blue-bar > .track {
+   -fx-background-color: #444444;          /* Dark gray track */
+   -fx-background-radius: 2;
+   -fx-border-radius: 2;
+}
+
+/* Green progress bar for completed items */
+.green-bar {
+   -fx-accent: #4CAF50;                    /* Green */
+   -fx-border-color: #666666;              /* Medium gray border */
+   -fx-border-width: 1px;
+   -fx-border-radius: 3px;
+}
+
+.green-bar > .bar {
+   -fx-background-color: #4CAF50;          /* Match accent color */
+   -fx-background-insets: 1;
+   -fx-background-radius: 2;
+   -fx-padding: 1em;
+}
+
+.green-bar > .track {
+   -fx-background-color: #444444;          /* Dark gray track */
+   -fx-background-radius: 2;
+   -fx-border-radius: 2;
+}
+
+/* Red progress bar for error items */
+.red-bar {
+   -fx-accent: #F44336;                    /* Red */
+   -fx-border-color: #666666;              /* Medium gray border */
+   -fx-border-width: 1px;
+   -fx-border-radius: 3px;
+}
+
+.red-bar > .bar {
+   -fx-background-color: #F44336;          /* Match accent color */
+   -fx-background-insets: 1;
+   -fx-background-radius: 2;
+   -fx-padding: 1em;
+}
+
+.red-bar > .track {
+   -fx-background-color: #444444;          /* Dark gray track */
+   -fx-background-radius: 2;
+   -fx-border-radius: 2;
+}
+
+/* Checkbox styling */
+.check-box {
+    -fx-text-fill: #e9ecef;                /* Light gray text */
+}
+
+.check-box .box {
+    -fx-background-color: #444444;         /* Medium gray box background */
+    -fx-border-color: #555555;             /* Slightly lighter border */
+}
+
+/* Label styling */
+.label {
+    -fx-text-fill: #e9ecef;                /* Light gray text */
+}
+
+/* Processing item border styling */
+.processing-item-border {
+   -fx-border-color: #444444;              /* Medium gray border */
+   -fx-border-width: 1px;
+   -fx-border-radius: 4px;                 /* Rounded corners */
+   -fx-background-color: #2d2d2d;          /* Slightly lighter than main background */
+   -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 3, 0, 0, 1); /* Subtle shadow */
+   -fx-margin: 2px 0px;                    /* Vertical spacing */
+}
+
+/* Processing panel container */
+.processing-panel {
+   -fx-background-color: #2a2a2a;          /* Dark gray background */
+   -fx-border-color: #444444;              /* Medium gray border */
+   -fx-border-width: 1;
+   -fx-pref-height: 408px;                 /* Initial height */
+   /* Remove max height to allow expansion */
+}
+
+/* Icon button styling */
+.icon-button {
+   -fx-padding: 6px 8px;                   /* Comfortable padding */
+   -fx-background-radius: 4px;             /* Rounded corners */
+}
+
+.icon-button:hover {
+   -fx-background-color: #555555;          /* Lighter gray on hover */
+}
+
+.icon-button .svg-icon {
+   -fx-fill: #e9ecef;                      /* Light gray icon color */
+}
+
+/* Special styling for remove/trash button */
+.icon-button.remove-button:hover {
+   -fx-background-color: #5d1c1c;          /* Dark red background on hover */
+}
+
+.icon-button.remove-button:hover .svg-icon {
+   -fx-fill: #ff5252;                      /* Bright red icon on hover */
+}
+
+/* Image container styling */
+.image-container {
+   -fx-border-color: #444444;              /* Medium gray border */
+   -fx-border-width: 1px;
+   -fx-border-radius: 4px;                 /* Rounded corners */
+   -fx-background-color: #333333;          /* Slightly lighter than main background */
+   -fx-padding: 10px;                      /* Inner spacing */
+}
+
+/* Cover image effect */
+.cover-image {
+   -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.6), 8, 0, 0, 0); /* Stronger shadow for depth */
+}
+
+/* Panel title text */
+.panel-title {
+   -fx-font-size: 14px;                    /* Larger text */
+   -fx-font-weight: bold;                  /* Bold for emphasis */
+}
+
+/* Filename text in processing items */
+.item-filename {
+   -fx-font-weight: bold;                  /* Bold for emphasis */
+}
+
+/* Status text in processing items */
+.item-status {
+   -fx-font-size: 10px;                    /* Smaller text */
+}
+
+/* Processing item container */
+.processing-item {
+   -fx-background-color: transparent;      /* Transparent background */
+}
+
+/* Retry button styling */
+.retry-button {
+   -fx-background-color: #663399;          /* Purple background */
+   -fx-text-fill: white;                   /* White text */
+}
+
+.retry-button:hover {
+   -fx-background-color: #8a2be2;          /* Lighter purple on hover */
+}
