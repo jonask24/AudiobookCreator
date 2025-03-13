@@ -36,3 +36,8 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Additional Ignores ###
+/shelf/
+/workspace.xml
+ChatHistory_schema*.xml
