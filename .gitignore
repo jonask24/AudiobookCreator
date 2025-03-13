@@ -41,3 +41,6 @@ build/
 /shelf/
 /workspace.xml
 ChatHistory_schema*.xml
+
+### Configuration Files ###
+firebender.json
