@@ -1,11 +1,12 @@
-package com.jk24.audiobookcreator;
+package com.jk24.audiobookcreator.service;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.logging.Logger;
+import java.util.prefs.Preferences;
+
+import com.jk24.audiobookcreator.model.Audiobook;
+import com.jk24.audiobookcreator.model.BookAudio;
 
 /**
  * Service for handling audiobook metadata suggestions and persistence.
@@ -16,12 +17,12 @@ import java.util.logging.Logger;
  * make context-aware suggestions for new audiobooks in the same series or folder.
  */
 public class MetadataService {
-    private static final Logger LOGGER = Logger.getLogger(MetadataService.class.getName());
+    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(MetadataService.class.getName());
     
     // Store metadata for books by folder path
-    private static final Map<String, List<Audiobook>> folderHistory = new HashMap<>();
+    private static final Map<String, java.util.List<Audiobook>> folderHistory = new HashMap<>();
     
-    private final PreferencesService prefsService;
+    private final com.jk24.audiobookcreator.service.PreferencesService prefsService;
     
     /**
      * Creates a new metadata service connected to the specified preferences service.
@@ -29,7 +30,7 @@ public class MetadataService {
      * 
      * @param prefsService the preferences service to use
      */
-    public MetadataService(PreferencesService prefsService) {
+    public MetadataService(com.jk24.audiobookcreator.service.PreferencesService prefsService) {
         this.prefsService = prefsService;
     }
     
@@ -45,7 +46,7 @@ public class MetadataService {
      * @param files the audio files to include in the audiobook
      * @return a pre-populated audiobook with suggested metadata
      */
-    public Audiobook suggestMetadata(File bookFolder, List<BookAudio> files) {
+    public Audiobook suggestMetadata(File bookFolder, java.util.List<BookAudio> files) {
         Audiobook audiobook = new Audiobook();
         
         // Add the files to the audiobook
@@ -63,7 +64,7 @@ public class MetadataService {
             
             if (folderHistory.containsKey(folderPath) && !folderHistory.get(folderPath).isEmpty()) {
                 // Use folder history for suggestions
-                List<Audiobook> previousBooks = folderHistory.get(folderPath);
+                java.util.List<Audiobook> previousBooks = folderHistory.get(folderPath);
                 Audiobook lastBook = previousBooks.get(previousBooks.size() - 1);
                 
                 // If title is empty, try to use first filename
@@ -117,7 +118,7 @@ public class MetadataService {
         String folderPath = bookFolder.getAbsolutePath();
         
         if (!folderHistory.containsKey(folderPath)) {
-            folderHistory.put(folderPath, new ArrayList<>());
+            folderHistory.put(folderPath, new java.util.ArrayList<>());
         }
         
         folderHistory.get(folderPath).add(audiobook);

@@ -1,4 +1,4 @@
-package com.jk24.audiobookcreator;
+package com.jk24.audiobookcreator.model;
 
 import java.io.File;
 import java.time.Duration;

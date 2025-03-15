@@ -1,5 +1,9 @@
-package com.jk24.audiobookcreator;
+package com.jk24.audiobookcreator.ui;
 
+import com.jk24.audiobookcreator.model.Audiobook;
+import com.jk24.audiobookcreator.processor.AudiobookProcessor;
+import com.jk24.audiobookcreator.service.MetadataService;
+import com.jk24.audiobookcreator.service.PreferencesService;
 import javafx.application.Application;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;

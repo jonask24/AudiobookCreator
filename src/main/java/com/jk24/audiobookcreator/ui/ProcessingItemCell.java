@@ -1,4 +1,4 @@
-package com.jk24.audiobookcreator;
+package com.jk24.audiobookcreator.ui;
 
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;

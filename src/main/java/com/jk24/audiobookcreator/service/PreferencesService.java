@@ -1,4 +1,4 @@
-package com.jk24.audiobookcreator;
+package com.jk24.audiobookcreator.service;
 
 import java.io.File;
 import java.util.prefs.Preferences;

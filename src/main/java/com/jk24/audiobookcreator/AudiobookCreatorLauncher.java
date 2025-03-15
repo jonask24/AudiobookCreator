@@ -1,5 +1,7 @@
 package com.jk24.audiobookcreator;
 
+import com.jk24.audiobookcreator.ui.AudioMergerApp;
+
 /**
  * Launcher class for the Audiobook Creator application.
  * This class serves as the main entry point that will be used

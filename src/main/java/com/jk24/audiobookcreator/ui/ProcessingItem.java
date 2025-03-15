@@ -1,5 +1,7 @@
-package com.jk24.audiobookcreator;
+package com.jk24.audiobookcreator.ui;
 
+import com.jk24.audiobookcreator.model.Audiobook;
+import com.jk24.audiobookcreator.processor.AudiobookProcessor;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleStringProperty;
