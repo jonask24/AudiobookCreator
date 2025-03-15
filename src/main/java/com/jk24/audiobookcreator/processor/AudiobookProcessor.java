@@ -46,9 +46,6 @@ public class AudiobookProcessor {
     private boolean multithreadingEnabled = true;
     private int numThreads = Runtime.getRuntime().availableProcessors();
     
-    // Progress reporting
-    private Consumer<Double> progressCallback;
-    
     // Feature toggles
     private boolean metadataEnabled = true;
     
@@ -110,9 +107,11 @@ public class AudiobookProcessor {
      * 1.0 (complete).
      * 
      * @param progressCallback function that accepts progress values
+     * @deprecated This method is deprecated. Pass callbacks directly to processAudiobook instead.
      */
+    @Deprecated
     public void setProgressCallback(Consumer<Double> progressCallback) {
-        this.progressCallback = progressCallback;
+        // Deprecated - do nothing
     }
     
     /**
@@ -141,12 +140,14 @@ public class AudiobookProcessor {
             File outputFile, 
             File coverImage,
             Consumer<Double> progressCallback) {
-        this.progressCallback = progressCallback; // Store the callback before creating the CompletableFuture
         
         // Initialize progress notification
         if (progressCallback != null) {
             progressCallback.accept(0.0); // Start at 0%
         }
+        
+        // Create a final reference to the callback for use in the lambda
+        final Consumer<Double> finalProgressCallback = progressCallback;
         
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -156,16 +157,22 @@ public class AudiobookProcessor {
                         .toList();
                 
                 // Report actual start of processing
-                if (progressCallback != null) {
-                    progressCallback.accept(0.01); // Started processing
+                if (finalProgressCallback != null) {
+                    finalProgressCallback.accept(0.01); // Started processing
                 }
                
                 // Process the files
-                mergeFiles(files, outputFile, audiobook, coverImage);
+                mergeFiles(files, outputFile, audiobook, coverImage, finalProgressCallback);
                 
                 // Ensure we send a final 100% progress update
-                if (progressCallback != null) {
-                    progressCallback.accept(1.0);  // Completed
+                if (finalProgressCallback != null) {
+                    finalProgressCallback.accept(1.0);  // Completed
+                    try {
+                        Thread.sleep(100);
+                        finalProgressCallback.accept(1.0);  // Send second completion signal
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
                 }
                 
                 return outputFile;
@@ -260,10 +267,11 @@ public class AudiobookProcessor {
      * @param outputFile destination M4B file
      * @param audiobook the audiobook containing metadata
      * @param coverImage optional cover image file
+     * @param progressCallback callback for progress updates
      * @throws IOException if an I/O error occurs
      * @throws EncoderException if there's an error during encoding
      */
-    public void mergeFiles(List<File> inputFiles, File outputFile, Audiobook audiobook, File coverImage) throws IOException, EncoderException {
+    public void mergeFiles(List<File> inputFiles, File outputFile, Audiobook audiobook, File coverImage, Consumer<Double> progressCallback) throws IOException, EncoderException {
         if (inputFiles.isEmpty()) {
             throw new IllegalArgumentException("No input files provided");
         }
@@ -271,7 +279,7 @@ public class AudiobookProcessor {
         // Special case: If we have a single M4B file, just update its metadata
         if (inputFiles.size() == 1 && inputFiles.get(0).getName().toLowerCase().endsWith(".m4b")) {
             File inputM4b = inputFiles.get(0);
-            handleSingleM4bFile(inputM4b, outputFile, audiobook, coverImage);
+            handleSingleM4bFile(inputM4b, outputFile, audiobook, coverImage, progressCallback);
             return;
         }
         
@@ -283,23 +291,23 @@ public class AudiobookProcessor {
             // Step 1: Convert all files to the same format (with multithreading if enabled)
             List<File> convertedFiles;
             if (multithreadingEnabled && numThreads > 1) {
-                convertedFiles = convertFilesParallel(inputFiles, tempDir);
+                convertedFiles = convertFilesParallel(inputFiles, tempDir, progressCallback);
             } else {
-                convertedFiles = convertFiles(inputFiles, tempDir);
+                convertedFiles = convertFiles(inputFiles, tempDir, progressCallback);
             }
             
             // Step 2: Concatenate all files
             File mergedRawFile = new File(tempDir, "merged.tmp");
-            concatenateFiles(convertedFiles, mergedRawFile);
+            concatenateFiles(convertedFiles, mergedRawFile, progressCallback);
             
             // Step 3: Convert to M4B (possibly with temporary name if metadata is enabled)
             File finalOutputFile;
             if (metadataEnabled) {
                 File tempOutputFile = new File(tempDir, "pre_metadata.m4b");
-                convertToM4B(mergedRawFile, tempOutputFile);
-                finalOutputFile = applyMetadata(tempOutputFile, outputFile, audiobook, coverImage);
+                convertToM4B(mergedRawFile, tempOutputFile, progressCallback);
+                finalOutputFile = applyMetadata(tempOutputFile, outputFile, audiobook, coverImage, progressCallback);
             } else {
-                convertToM4B(mergedRawFile, outputFile);
+                convertToM4B(mergedRawFile, outputFile, progressCallback);
                 finalOutputFile = outputFile;
             }
             
@@ -321,18 +329,31 @@ public class AudiobookProcessor {
      * Handles a single M4B file by updating its metadata and copying it to the output location.
      * This optimization avoids unnecessary conversion when the input is already in M4B format.
      * 
+     * NOTE: This method has been enhanced with simulated progress updates to ensure
+     * progress bars update smoothly in the UI. Since the actual work is much faster than
+     * a normal conversion, we add strategic simulation points to make progress bars behave
+     * similarly to normal processing, creating a consistent user experience.
+     * 
+     * The UI will detect this optimization path by monitoring the pattern of progress values:
+     * 0.01 -> 0.1 -> big jump to 0.4, which is a signature of direct M4B processing.
+     * 
      * @param inputFile The source M4B file
      * @param outputFile The destination file
      * @param audiobook The audiobook metadata
      * @param coverImage Optional cover image
+     * @param progressCallback Callback for progress updates
      * @throws IOException if an I/O error occurs
      */
-    private void handleSingleM4bFile(File inputFile, File outputFile, Audiobook audiobook, File coverImage) throws IOException {
-        if (progressCallback != null) {
-            progressCallback.accept(0.1); // Started processing
-        }
-        
+    private void handleSingleM4bFile(File inputFile, File outputFile, Audiobook audiobook, File coverImage, Consumer<Double> progressCallback) throws IOException {
         try {
+            // Make a full sequence of progress updates to simulate regular processing stages
+            // This ensures UI progress bars update smoothly even with this optimized path
+            if (progressCallback != null) {
+                progressCallback.accept(0.01); // Initial
+                Thread.sleep(50); // Small delay to ensure UI updates
+                progressCallback.accept(0.1); // Started
+            }
+            
             // Log that we're optimizing by just updating metadata
             System.out.println("Input is already an M4B file. Optimizing by just updating metadata.");
             System.out.println("Source: " + inputFile.getAbsolutePath());
@@ -340,16 +361,32 @@ public class AudiobookProcessor {
             
             // Copy the file first if the source and destination are different
             if (!inputFile.getAbsolutePath().equals(outputFile.getAbsolutePath())) {
+                // Simulate progress during file copy
+                if (progressCallback != null) {
+                    // Generate intermediate progress updates during file copy
+                    for (double progress = 0.1; progress <= 0.4; progress += 0.1) {
+                        progressCallback.accept(progress);
+                        Thread.sleep(50); // Small delay to ensure UI updates
+                    }
+                }
+                
                 Files.copy(inputFile.toPath(), outputFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 System.out.println("Copied M4B file to destination");
             }
             
             if (progressCallback != null) {
                 progressCallback.accept(0.5); // File copied
+                Thread.sleep(50);
             }
             
             // Apply metadata if enabled
             if (metadataEnabled) {
+                // Simulate more progress during metadata operations
+                if (progressCallback != null) {
+                    progressCallback.accept(0.6);
+                    Thread.sleep(50);
+                }
+                
                 System.out.println("Updating metadata for M4B file:");
                 System.out.println("- Title: \"" + audiobook.getTitle() + "\"");
                 System.out.println("- Artist: \"" + audiobook.getAuthor() + "\"");
@@ -358,6 +395,11 @@ public class AudiobookProcessor {
                 
                 if (coverImage != null && coverImage.exists()) {
                     System.out.println("- Cover art: \"" + coverImage.getName() + "\"");
+                }
+                
+                if (progressCallback != null) {
+                    progressCallback.accept(0.7);
+                    Thread.sleep(50);
                 }
                 
                 // Use the fully qualified name for AudioFile from JAudioTagger
@@ -385,6 +427,11 @@ public class AudiobookProcessor {
                     tag.setField(FieldKey.TRACK, String.valueOf(audiobook.getBookNumber()));
                 }
                 
+                if (progressCallback != null) {
+                    progressCallback.accept(0.8);
+                    Thread.sleep(50);
+                }
+                
                 // Handle cover art - special logic to preserve existing art if none provided
                 if (coverImage != null && coverImage.exists()) {
                     try {
@@ -399,16 +446,39 @@ public class AudiobookProcessor {
                     System.out.println("No new cover art provided - preserving existing artwork if any");
                 }
                 
+                if (progressCallback != null) {
+                    progressCallback.accept(0.9);
+                    Thread.sleep(50);
+                }
+                
                 audioFile.commit(); // Save changes to the file
                 System.out.println("Metadata update completed");
             } else {
-                System.out.println("Metadata updates disabled - preserving original metadata");
+                // Even if we don't apply metadata, still simulate progress
+                if (progressCallback != null) {
+                    for (double progress = 0.6; progress <= 0.9; progress += 0.1) {
+                        progressCallback.accept(progress);
+                        Thread.sleep(50);
+                    }
+                    
+                    System.out.println("Metadata updates disabled - preserving original metadata");
+                }
             }
             
+            // Add one more delay before final progress to ensure UI catches up
+            Thread.sleep(100);
+            
+            // Always send the final progress report
             if (progressCallback != null) {
-                progressCallback.accept(1.0); // 100% progress
+                progressCallback.accept(1.0);  // Completed
+                Thread.sleep(100);
+                progressCallback.accept(1.0);  // Send a second completion signal to be sure
             }
             
+        } catch (InterruptedException e) {
+            // Handle thread interruption
+            Thread.currentThread().interrupt();
+            throw new IOException("M4B processing was interrupted");
         } catch (Exception e) {
             System.err.println("Error handling single M4B file: " + e.getMessage());
             e.printStackTrace();
@@ -423,9 +493,10 @@ public class AudiobookProcessor {
      * @param outputFile the output file to save with metadata
      * @param audiobook the audiobook containing metadata
      * @param coverImage optional cover image file
+     * @param progressCallback callback for progress updates
      * @return the output file with metadata applied
      */
-    private File applyMetadata(File inputFile, File outputFile, Audiobook audiobook, File coverImage) {
+    private File applyMetadata(File inputFile, File outputFile, Audiobook audiobook, File coverImage, Consumer<Double> progressCallback) {
         try {
             // Apply actual metadata to the M4B file
             System.out.println("Adding metadata to M4B file:");
@@ -477,27 +548,36 @@ public class AudiobookProcessor {
           
             audioFile.commit(); // Save changes to the file
            
-           // Copy to final destination
-           Files.copy(inputFile.toPath(), outputFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            // Copy to final destination
+            Files.copy(inputFile.toPath(), outputFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
            
-           if (progressCallback != null) {
-               progressCallback.accept(1.0); // 100% progress
-           }
+            // Make sure we signal completion
+            if (progressCallback != null) {
+                progressCallback.accept(1.0); // 100% progress
+                
+                // Add an additional completion notification after a delay
+                try {
+                    Thread.sleep(100);
+                    progressCallback.accept(1.0); // Send second completion signal
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
            
-           return outputFile;
-       } catch (Exception e) {
+            return outputFile;
+        } catch (Exception e) {
             System.err.println("Warning: Failed to apply metadata: " + e.getMessage());
-           // Fallback if metadata application fails
-           try {
-               if (!outputFile.exists() || outputFile.length() == 0) {
-                   Files.copy(inputFile.toPath(), outputFile.toPath());
-               }
-           } catch (IOException copyError) {
-               System.err.println("Error copying file after metadata failure: " + copyError.getMessage());
-           }
-           return outputFile;
-       }
-   }
+            // Fallback if metadata application fails
+            try {
+                if (!outputFile.exists() || outputFile.length() == 0) {
+                    Files.copy(inputFile.toPath(), outputFile.toPath());
+                }
+            } catch (IOException copyError) {
+                System.err.println("Error copying file after metadata failure: " + copyError.getMessage());
+            }
+            return outputFile;
+        }
+    }
     
     /**
      * Sequential conversion of files to a common format.
@@ -505,10 +585,11 @@ public class AudiobookProcessor {
      * 
      * @param inputFiles list of files to convert
      * @param tempDir temporary directory for converted files
+     * @param progressCallback callback for progress updates
      * @return list of converted files
      * @throws EncoderException if encoding fails
      */
-    private List<File> convertFiles(List<File> inputFiles, File tempDir) throws EncoderException {
+    private List<File> convertFiles(List<File> inputFiles, File tempDir, Consumer<Double> progressCallback) throws EncoderException {
         List<File> convertedFiles = new ArrayList<>();
         int totalFiles = inputFiles.size();
         
@@ -559,10 +640,11 @@ public class AudiobookProcessor {
      * 
      * @param inputFiles list of files to convert
      * @param tempDir temporary directory for converted files
+     * @param progressCallback callback for progress updates
      * @return list of converted files in the original order
      * @throws EncoderException if encoding fails
      */
-    private List<File> convertFilesParallel(List<File> inputFiles, File tempDir) throws EncoderException {
+    private List<File> convertFilesParallel(List<File> inputFiles, File tempDir, Consumer<Double> progressCallback) throws EncoderException {
         int totalFiles = inputFiles.size();
         
         // Pre-create the output files list to maintain the correct order
@@ -677,9 +759,10 @@ public class AudiobookProcessor {
      * 
      * @param inputFiles list of files to concatenate
      * @param outputFile destination file
+     * @param progressCallback callback for progress updates
      * @throws IOException if an I/O error occurs
      */
-    private void concatenateFiles(List<File> inputFiles, File outputFile) throws IOException {
+    private void concatenateFiles(List<File> inputFiles, File outputFile, Consumer<Double> progressCallback) throws IOException {
         try (FileOutputStream fos = new FileOutputStream(outputFile);
              FileChannel outputChannel = fos.getChannel()) {
             
@@ -706,9 +789,10 @@ public class AudiobookProcessor {
      * 
      * @param inputFile input audio file
      * @param outputFile output M4B file
+     * @param progressCallback callback for progress updates
      * @throws EncoderException if encoding fails
      */
-    private void convertToM4B(File inputFile, File outputFile) throws EncoderException {
+    private void convertToM4B(File inputFile, File outputFile, Consumer<Double> progressCallback) throws EncoderException {
         AudioAttributes audioAttributes = new AudioAttributes();
         audioAttributes.setCodec("aac");
         audioAttributes.setBitRate(128000);
@@ -745,3 +829,4 @@ public class AudiobookProcessor {
            });
     }
 }
+

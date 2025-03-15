@@ -1,5 +1,6 @@
 package com.jk24.audiobookcreator.ui;
 
+import com.jk24.audiobookcreator.model.Audiobook;
 import javafx.geometry.Insets;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -9,26 +10,37 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 
 /**
- * Custom ListCell for displaying processing items with progress bars
+ * Custom ListCell for displaying processing items with progress bars.
+ * This cell uses a manual update approach to avoid binding issues when cells are recycled.
  */
 public class ProcessingItemCell extends ListCell<ProcessingItem> {
+    // UI components
     private final HBox content;
     private final Label filename;
     private final ProgressBar progressBar;
     private final Label statusLabel;
     private final Button retryButton;
+    
+    // Items needed to track cell state
     private EventHandler<ActionEvent> retryHandler;
+    private ProcessingItem currentItem; // The currently displayed item
+    private String cellId = "cell-" + System.nanoTime(); // Unique ID for debugging
+    
+    // Properties for the currently displayed content
+    private final SimpleDoubleProperty cellProgress = new SimpleDoubleProperty(0); 
     
     public ProcessingItemCell() {
         // Create UI components
         content = new HBox(10); // 10px spacing
         content.setPadding(new Insets(8));
-        content.getStyleClass().addAll("processing-item", "processing-item-border"); // Add border class
+        content.getStyleClass().addAll("processing-item", "processing-item-border");
         
         VBox fileInfoBox = new VBox(3);
         filename = new Label();
@@ -41,6 +53,9 @@ public class ProcessingItemCell extends ListCell<ProcessingItem> {
         progressBar.setPrefWidth(180); // Make progress bar wider
         progressBar.setPrefHeight(16); // Set consistent height
         progressBar.getStyleClass().add("blue-bar"); // Add a special style class
+        
+        // Important: Bind the progress bar to our cell's progress property
+        progressBar.progressProperty().bind(cellProgress);
         
         // Create retry button
         retryButton = new Button("Retry");
@@ -55,7 +70,7 @@ public class ProcessingItemCell extends ListCell<ProcessingItem> {
     public void setRetryHandler(EventHandler<ActionEvent> handler) {
         this.retryHandler = handler;
         retryButton.setOnAction(event -> {
-            if (retryHandler != null) {
+            if (retryHandler != null && currentItem != null) {
                 retryHandler.handle(event);
             }
         });
@@ -63,81 +78,99 @@ public class ProcessingItemCell extends ListCell<ProcessingItem> {
     
     @Override
     protected void updateItem(ProcessingItem item, boolean empty) {
+        // Remember what we were showing before
+        ProcessingItem oldItem = currentItem;
+        
+        // Call the parent first
         super.updateItem(item, empty);
         
+        // Clear everything if empty
         if (empty || item == null) {
+            currentItem = null;
             setText(null);
             setGraphic(null);
-            // Clear any existing listeners
-            if (statusListener != null) {
-                statusListener = null;
-            }
-        } else {
-            // Update values
-            filename.setText(item.getFilename());
-            
-            // Bind the progress bar to the progress property for live updates
-            progressBar.progressProperty().unbind(); // Unbind from previous items first
-            progressBar.progressProperty().bind(item.progressProperty());
-            
-            // Listen for status changes to update the bar color
-            if (statusListener != null) {
-                item.statusProperty().removeListener(statusListener);
-            }
-            statusListener = (observable, oldValue, newValue) -> {
-                // Update the status label text when the status changes
-                System.out.println("Status changed: " + oldValue + " -> " + newValue);
-                statusLabel.setText(newValue);
-                updateStatusStyle(newValue);
-                
-                // Show/hide retry button based on status
-                retryButton.setVisible("Error".equals(newValue));
-            };
-            item.statusProperty().addListener(statusListener);
-            
-            // Also update now in case the status is already set
-            statusLabel.setText(item.getStatus());
-            System.out.println("Initial status for cell: " + item.getStatus());
-            updateStatusStyle(item.getStatus());
-            
-            // Show retry button if status is Error
-            retryButton.setVisible("Error".equals(item.getStatus()));
-            
-            setGraphic(content);
+            // Reset our progress property when not showing an item
+            cellProgress.set(0);
+            return;
+        }
+        
+        // Set the current item
+        currentItem = item;
+        
+        // We are explicitly NOT binding to item properties because of ListView cell recycling issues
+        // Instead, we'll manually update values and use our own cell-specific properties
+        
+        // Update UI values directly - these don't change after initialization
+        filename.setText(item.getFilename());
+        
+        // Update progress and status - ALWAYS update to current values
+        updateCellState(item);
+        
+        // Make retry button visible if needed
+        retryButton.setVisible("Error".equals(item.getStatus()));
+        
+        // Set the cell content
+        setGraphic(content);
+        
+        // Log when this cell is assigned to a new item
+        if (oldItem != item) {
+            System.out.println("Cell " + cellId + " now showing: " + item.getFilename());
         }
     }
     
-    private ChangeListener<String> statusListener;
+    /**
+     * Updates the cell state from the item.
+     * This method is called from updateItem and can be called from outside to refresh.
+     */
+    public void updateCellState(ProcessingItem item) {
+        if (item != null && item == currentItem) {
+            // Always get current progress from the item - this is critical
+            double progress = item.getProgress();
+            cellProgress.set(progress);
+            
+            // Update status
+            String status = item.getStatus();
+            statusLabel.setText(status);
+            updateStatusStyle(status);
+            
+            // Debug to confirm updates are occurring
+            System.out.println("Cell " + cellId + " updated: " + item.getFilename() + 
+                " Progress: " + progress + ", Status: " + status);
+        }
+    }
+    
+    /**
+     * Gets the current item being displayed by this cell
+     */
+    public ProcessingItem getCurrentItem() {
+        return currentItem;
+    }
     
     /**
      * Update the progress bar style based on the current status
      */
     private void updateStatusStyle(String status) {
-           // Style based on status
-            switch (status) {
-               case "Completed":
-                   statusLabel.setTextFill(Color.GREEN);
-                   // Change the progress bar to green when complete
-                   progressBar.getStyleClass().removeAll("blue-bar");
-                   progressBar.getStyleClass().add("green-bar");
-                   break;
-               case "Processing":
-                   statusLabel.setTextFill(Color.BLUE);
-                   // Ensure the progress bar is blue during processing
-                   progressBar.getStyleClass().removeAll("green-bar");
-                   progressBar.getStyleClass().add("blue-bar");
-                   break;
-               case "Error":
-                   statusLabel.setTextFill(Color.RED);
-                   // Change the progress bar to red on error
-                   progressBar.getStyleClass().removeAll("blue-bar", "green-bar");
-                   progressBar.getStyleClass().add("red-bar");
-                   break;
-               default:
-                   statusLabel.setTextFill(Color.GRAY);
-                   // Reset to blue bar for other states
-                   progressBar.getStyleClass().removeAll("green-bar", "red-bar");
-                   progressBar.getStyleClass().add("blue-bar");
-       }
-   }
+        // Style based on status
+        switch (status) {
+            case "Completed":
+                statusLabel.setTextFill(Color.GREEN);
+                progressBar.getStyleClass().removeAll("blue-bar", "red-bar");
+                progressBar.getStyleClass().add("green-bar");
+                break;
+            case "Processing":
+                statusLabel.setTextFill(Color.BLUE);
+                progressBar.getStyleClass().removeAll("green-bar", "red-bar");
+                progressBar.getStyleClass().add("blue-bar");
+                break;
+            case "Error":
+                statusLabel.setTextFill(Color.RED);
+                progressBar.getStyleClass().removeAll("blue-bar", "green-bar");
+                progressBar.getStyleClass().add("red-bar");
+                break;
+            default:
+                statusLabel.setTextFill(Color.GRAY);
+                progressBar.getStyleClass().removeAll("green-bar", "red-bar");
+                progressBar.getStyleClass().add("blue-bar");
+        }
+    }
 }

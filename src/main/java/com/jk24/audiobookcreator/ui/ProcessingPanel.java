@@ -11,10 +11,13 @@ import javafx.scene.control.ListView;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import javafx.application.Platform;
+import javafx.scene.control.ListView;
 
 /**
  * Panel for displaying and tracking audiobook processing status.
@@ -30,7 +33,7 @@ import javafx.application.Platform;
 public class ProcessingPanel extends VBox {
     private final ObservableList<ProcessingItem> processingItems = FXCollections.observableArrayList();
     private final ListView<ProcessingItem> processingListView;
-    private final Map<Audiobook, ProcessingItem> itemMap = new HashMap<>();
+    private final ConcurrentHashMap<UUID, ProcessingItem> itemMap = new ConcurrentHashMap<>();
     private AudiobookProcessor processor;
     
     /**
@@ -56,7 +59,7 @@ public class ProcessingPanel extends VBox {
         processingListView.setCellFactory(lv -> {
             ProcessingItemCell cell = new ProcessingItemCell();
             cell.setRetryHandler(event -> {
-                ProcessingItem item = cell.getItem();
+                ProcessingItem item = cell.getCurrentItem();
                 if (item != null) {
                     retryProcessing(item);
                 }
@@ -76,16 +79,20 @@ public class ProcessingPanel extends VBox {
     }
     
     /**
-     * Add an audiobook to the processing queue
+     * Add an audiobook to the processing queue with a default pending state.
+     * This is mainly used for testing or for manual queue management.
+     * 
+     * @param audiobook the audiobook to add to the queue
+     * @return the created processing item
      */
     public ProcessingItem addProcessingItem(Audiobook audiobook) {
-        if (itemMap.containsKey(audiobook)) {
-            return itemMap.get(audiobook);
-        }
+        UUID uuid = UUID.randomUUID();
+        ProcessingItem item = new ProcessingItem(audiobook, uuid);
         
-        ProcessingItem item = new ProcessingItem(audiobook);
+        // Add to both collections
         processingItems.add(item);
-        itemMap.put(audiobook, item);
+        itemMap.put(uuid, item);
+        
         return item;
     }
     
@@ -93,10 +100,9 @@ public class ProcessingPanel extends VBox {
      * Remove an audiobook from the processing queue
      */
     public void removeProcessingItem(Audiobook audiobook) {
-        ProcessingItem item = itemMap.remove(audiobook);
-        if (item != null) {
-            processingItems.remove(item);
-        }
+        // Find the item by audiobook
+        itemMap.entrySet().removeIf(entry -> entry.getValue().getAudiobook().equals(audiobook));
+        processingItems.removeIf(item -> item.getAudiobook().equals(audiobook));
     }
     
     /**
@@ -104,59 +110,126 @@ public class ProcessingPanel extends VBox {
      */
     public CompletableFuture<File> processAudiobook(AudiobookProcessor processor, Audiobook audiobook, File outputFile, File coverImage) {
         this.processor = processor; // Store processor for retries
-        ProcessingItem item = addProcessingItem(audiobook);
         
-        // Set the actual output filename and store retry information
-        item.setFilename(outputFile.getName());
-        item.setOutputFile(outputFile);
-        item.setCoverImage(coverImage);
+        // Record the time when this processing started
+        final long startTimeMs = System.currentTimeMillis();
         
-        // Set the initial progress and status
+        // Create a unique ID for this processing job
+        final UUID processId = UUID.randomUUID();
+        
+        // Create a strongly referenced item and add it to the display list
+        final ProcessingItem item = new ProcessingItem(audiobook, processId);
+        
+        // Store the filename to use in logs
+        final String filenameForLogs = outputFile.getName();
+        
+        // Add the item to our collections on the UI thread
         Platform.runLater(() -> {
-            item.setProgress(0.01); // Show a small progress to indicate it's starting
+            // Initialize the item
+            item.setFilename(outputFile.getName());
+            item.setOutputFile(outputFile);
+            item.setCoverImage(coverImage);
             item.setStatus("Starting");
+            item.setProgress(0.01);
+            
+            // Add to collections
+            processingItems.add(item);
+            itemMap.put(processId, item);
+            
+            // Ensure this item is visible
+            processingListView.scrollTo(item);
+            processingListView.refresh();
+            
+            System.out.println("[" + filenameForLogs + "] Created ProcessingItem, initial progress 0.01");
         });
-       
-       // Process the audiobook and update progress
-       return processor.processAudiobook(audiobook, outputFile, coverImage, progress -> {
-           // Ensure the update happens on the JavaFX UI thread
-           Platform.runLater(() -> {
-               // Debug the progress updates
-               System.out.println("Progress update for " + audiobook.getTitle() + ": " + progress);
+        
+        // Special flags for this processing job
+        final boolean[] isM4bOptimizationPath = new boolean[1];
+        isM4bOptimizationPath[0] = false;
+        final double[] lastProgressValue = new double[1];
+        lastProgressValue[0] = 0.0;
+        final AtomicLong lastUpdateMs = new AtomicLong(System.currentTimeMillis());
+        
+        // Direct progress handler with direct reference to this item
+        java.util.function.Consumer<Double> progressHandler = progress -> {
+            // Keep track of the book filename for debugging
+            String itemName = filenameForLogs;
+            
+            // Detect M4B optimization path
+            if (progress == 0.01 && lastProgressValue[0] == 0.0) {
+                lastProgressValue[0] = progress;
+            } else if (progress == 0.1 && lastProgressValue[0] == 0.01) {
+                lastProgressValue[0] = progress;
+            } else if (progress >= 0.4 && lastProgressValue[0] == 0.1) {
+                isM4bOptimizationPath[0] = true;
+                lastProgressValue[0] = progress;
+            } else {
+                lastProgressValue[0] = progress;
+            }
+            
+            // Throttling logic
+            long now = System.currentTimeMillis();
+            long lastUpdate = lastUpdateMs.get();
+            long updateThreshold = isM4bOptimizationPath[0] ? 50 : 
+                (progress < 0.1 || progress > 0.9) ? 100 :
+                (now - startTimeMs > 30000) ? 1000 : 250;
+            
+            // Skip if updated too recently
+            if (now - lastUpdate < updateThreshold) {
+                return;
+            }
+            
+            // Update timestamp
+            lastUpdateMs.set(now);
+            
+            // Apply the update on UI thread
+            Platform.runLater(() -> {
+                // CRITICAL FIX: Get the item directly from our map using the process ID
+                // This ensures we always update the correct item even if UI cells get recycled
+                ProcessingItem targetItem = itemMap.get(processId);
                 
-                // Store a reference to the specific item we're updating
-                final ProcessingItem specificItem = itemMap.get(audiobook);
-                
-                // Make sure we don't get "stuck" at values too close to each other
-                // Use the stored reference to ensure we're working with the right item
-                if (specificItem != null) {
-                    double currentProgress = specificItem.getProgress();
+                if (targetItem != null) {
+                    System.out.println("[" + itemName + "] Progress update: " + progress + 
+                            (isM4bOptimizationPath[0] ? " (M4B optimization path)" : ""));
                     
-                    // Always update for completion and for significant changes
-                    if (progress >= 0.999) {
-                       // Explicitly set to 1.0 for completion
-                       specificItem.setProgress(1.0);
-                       System.out.println("Setting progress 1.0 for " + audiobook.getTitle() + " (should trigger status 'Completed')");
-                        // Force a status update if needed
-                        if (!"Completed".equals(specificItem.getStatus())) {
-                            System.out.println("Status not updated automatically, forcing update to 'Completed'");
-                            specificItem.setStatus("Completed");
+                    // Update the item's progress
+                    boolean isHighProgress = isM4bOptimizationPath[0] ? progress >= 0.95 : progress >= 0.99;
+                    
+                    if (isHighProgress) {
+                        targetItem.setProgress(1.0);
+                        String currentStatus = targetItem.getStatus();
+                        if (!currentStatus.equals("Completed")) {
+                            targetItem.setStatus("Completed");
+                            System.out.println("[" + itemName + "] Status set to Completed");
                         }
-                    } else if (progress < 0.02 || progress > 0.98 || Math.abs(progress - currentProgress) >= 0.01) {
-                        // Normal update for significant changes
-                        specificItem.setProgress(progress);
+                    } else {
+                        targetItem.setProgress(progress);
                     }
+                    
+                    // IMPORTANT: Force the ListView to refresh all cells
+                    // This ensures all visible cells show the correct progress
+                    processingListView.refresh();
+                } else {
+                    System.out.println("[" + itemName + "] WARNING: Item not found for progress update: " + progress);
                 }
-           });
-       }).exceptionally(ex -> {
-           // Handle errors
-           Platform.runLater(() -> {
-                System.err.println("Error processing " + audiobook.getTitle() + ": " + ex.getMessage());
-                ex.printStackTrace();
-               item.setStatus("Error");
-           });
-           return null;
-        });
+            });
+        };
+        
+        // Process the audiobook with our handler
+        return processor.processAudiobook(audiobook, outputFile, coverImage, progressHandler)
+            .exceptionally(ex -> {
+                Platform.runLater(() -> {
+                    System.err.println("[" + filenameForLogs + "] ERROR: " + ex.getMessage());
+                    
+                    // Get the item directly from our map
+                    ProcessingItem targetItem = itemMap.get(processId);
+                    if (targetItem != null) {
+                        targetItem.setStatus("Error");
+                        processingListView.refresh();
+                    }
+                });
+                return null;
+            });
     }
     
     /**
@@ -168,50 +241,113 @@ public class ProcessingPanel extends VBox {
             return;
         }
         
+        // Get references to the necessary data
+        final Audiobook audiobook = item.getAudiobook();
+        final UUID processId = item.getUuid(); // Get the UUID for item identification
+        final File outputFile = item.getOutputFile();
+        final File coverImage = item.getCoverImage();
+        final String filenameForLogs = outputFile.getName();
+        
         // Reset the item status for retry
-        item.resetForRetry();
+        Platform.runLater(() -> {
+            item.resetForRetry();
+            processingListView.refresh();
+            System.out.println("[" + filenameForLogs + "] Retry - reset item status");
+        });
         
-        Audiobook audiobook = item.getAudiobook();
-        File outputFile = item.getOutputFile();
-        File coverImage = item.getCoverImage();
+        System.out.println("[" + filenameForLogs + "] Retrying processing");
         
-        System.out.println("Retrying processing for: " + audiobook.getTitle());
+        // Tracking state for this retry operation
+        final long startTimeMs = System.currentTimeMillis();
+        final AtomicLong lastUpdateMs = new AtomicLong(System.currentTimeMillis());
         
-        // Process again with same parameters
-        processor.processAudiobook(audiobook, outputFile, coverImage, progress -> {
+        // Create a direct progress handler that uses the item's UUID to identify it
+        java.util.function.Consumer<Double> progressHandler = progress -> {
+            // Throttling logic
+            long now = System.currentTimeMillis();
+            long lastUpdate = lastUpdateMs.get();
+            long updateThreshold = (progress < 0.1 || progress > 0.9) ? 100 :
+                (now - startTimeMs > 30000) ? 1000 : 250;
+            
+            // Skip update if not enough time has passed
+            if (now - lastUpdate < updateThreshold) {
+                return;
+            }
+            
+            // Update timestamp
+            lastUpdateMs.set(now);
+            
             Platform.runLater(() -> {
-                // Store a reference to the specific item we're updating
-                final ProcessingItem specificItem = itemMap.get(audiobook);
+                // CRITICAL FIX: Look up the item directly using its UUID
+                // This ensures we always update the correct item
+                ProcessingItem targetItem = itemMap.get(processId);
                 
-                if (specificItem != null) {
-                    double currentProgress = specificItem.getProgress();
+                if (targetItem != null) {
+                    System.out.println("[" + filenameForLogs + "] Retry progress: " + progress);
                     
-                    if (progress >= 0.999) {
-                        specificItem.setProgress(1.0);
-                        if (!"Completed".equals(specificItem.getStatus())) {
-                            specificItem.setStatus("Completed");
+                    // Update the item's progress
+                    if (progress >= 0.95) {
+                        targetItem.setProgress(1.0);
+                        if (!targetItem.getStatus().equals("Completed")) {
+                            targetItem.setStatus("Completed");
+                            System.out.println("[" + filenameForLogs + "] Status set to Completed");
                         }
-                    } else if (progress < 0.02 || progress > 0.98 || Math.abs(progress - currentProgress) >= 0.01) {
-                        specificItem.setProgress(progress);
+                    } else {
+                        targetItem.setProgress(progress);
                     }
+                    
+                    // Force refresh
+                    processingListView.refresh();
+                } else {
+                    System.out.println("[" + filenameForLogs + "] WARNING: Item not found for retry progress update");
                 }
             });
-        }).exceptionally(ex -> {
-            Platform.runLater(() -> {
-                System.err.println("Error retrying processing for " + audiobook.getTitle() + ": " + ex.getMessage());
-                ex.printStackTrace();
-                item.setStatus("Error");
+        };
+        
+        // Process with our handler
+        processor.processAudiobook(audiobook, outputFile, coverImage, progressHandler)
+            .exceptionally(ex -> {
+                Platform.runLater(() -> {
+                    System.err.println("[" + filenameForLogs + "] ERROR during retry: " + ex.getMessage());
+                    
+                    // Get the item using its UUID
+                    ProcessingItem targetItem = itemMap.get(processId);
+                    if (targetItem != null) {
+                        targetItem.setStatus("Error");
+                        processingListView.refresh();
+                    }
+                });
+                return null;
             });
-            return null;
-        });
     }
     
     /**
      * Clear all completed items
      */
     public void clearCompletedItems() {
-        processingItems.removeIf(item -> "Completed".equals(item.getStatus()));
-        // Update the item map
-        itemMap.entrySet().removeIf(entry -> !processingItems.contains(entry.getValue()));
+        // First get all items to remove
+        List<ProcessingItem> itemsToRemove = processingItems.stream()
+            .filter(item -> "Completed".equals(item.getStatus()))
+            .collect(java.util.stream.Collectors.toList());
+            
+        // Remove from the observable list
+        processingItems.removeAll(itemsToRemove);
+        
+        // Remove from the item map - use UUID for safe removal
+        for (ProcessingItem item : itemsToRemove) {
+            itemMap.remove(item.getUuid());
+        }
+        
+        // Refresh all visible cells after removing items
+        refreshVisibleCells();
+    }
+    
+    /**
+     * Force a refresh of all visible cells to ensure they display the correct state.
+     * This solves the issue where cells may show incorrect progress information.
+     */
+    private void refreshVisibleCells() {
+        // Force ListView to refresh all cells - this is the most reliable approach
+        processingListView.refresh();
     }
 }
