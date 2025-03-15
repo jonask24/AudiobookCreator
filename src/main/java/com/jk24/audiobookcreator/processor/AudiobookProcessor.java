@@ -234,14 +234,16 @@ public class AudiobookProcessor {
         }
         
         // Remove characters that are typically not allowed in filenames
+        // Replace all characters illegal in filenames across operating systems with hyphens
+        // This ensures consistent filename sanitization for Windows, macOS, and Linux
         return input.replace('/', '-')
                 .replace('\\', '-')
                 .replace(':', '-')
                 .replace('*', '-')
                 .replace('?', '-')
-                .replace('"', '\'')
-                .replace('<', '(')
-                .replace('>', ')')
+                .replace('"', '-')
+                .replace('<', '-')
+                .replace('>', '-')
                 .replace('|', '-');
     }
     
