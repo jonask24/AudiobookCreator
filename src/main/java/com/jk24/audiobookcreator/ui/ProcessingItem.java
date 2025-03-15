@@ -9,6 +9,7 @@ import javafx.beans.property.StringProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import java.io.File;
+import java.util.UUID;
 
 /**
  * Represents an audiobook that is being processed, with status tracking.
@@ -17,26 +18,41 @@ import java.io.File;
  * - Progress information (0.0 to 1.0)
  * - Status information ("Pending", "Processing", "Completed", "Error")
  * - File information for retry operations
+ * - Unique ID for identification
  */
 public class ProcessingItem {
     private final Audiobook audiobook;
     private final StringProperty filename = new SimpleStringProperty();
     private final DoubleProperty progress = new SimpleDoubleProperty(0.0);
     private final StringProperty status = new SimpleStringProperty("Pending");
+    private final UUID uuid; // Store the actual UUID object
     
     // Store retry information
     private final ObjectProperty<File> outputFile = new SimpleObjectProperty<>();
     private final ObjectProperty<File> coverImage = new SimpleObjectProperty<>();
     
     /**
-     * Creates a new processing item for the specified audiobook.
+     * Creates a new processing item for the specified audiobook with a random UUID.
      * Initially sets the filename from the audiobook title and
      * status to "Pending".
      * 
      * @param audiobook the audiobook being processed
      */
     public ProcessingItem(Audiobook audiobook) {
+        this(audiobook, UUID.randomUUID());
+    }
+    
+    /**
+     * Creates a new processing item for the specified audiobook with the provided UUID.
+     * Initially sets the filename from the audiobook title and
+     * status to "Pending".
+     * 
+     * @param audiobook the audiobook being processed
+     * @param uuid the UUID to identify this item
+     */
+    public ProcessingItem(Audiobook audiobook, UUID uuid) {
         this.audiobook = audiobook;
+        this.uuid = uuid;
         // We'll set the filename explicitly later, but initialize with a default
         this.filename.set(audiobook.getTitle() + ".m4b");
     }
@@ -104,17 +120,29 @@ public class ProcessingItem {
      * @param progress the progress value to set (0.0 to 1.0)
      */
     public void setProgress(double progress) {
-        this.progress.set(progress);
-        if (progress <= 0) {
+        // Clamp the progress value to the valid range
+        double clampedProgress = Math.min(Math.max(progress, 0.0), 1.0);
+        
+        // Update the progress property
+        this.progress.set(clampedProgress);
+        
+        // Determine the appropriate status based on the progress value
+        if (clampedProgress <= 0) {
             setStatus("Pending");
-        } else if (progress >= 1.0) {
+        } else if (clampedProgress >= 0.99) { 
             // Always explicitly set to "Completed" when progress is complete
             String currentStatus = getStatus();
-            if (!"Completed".equals(currentStatus)) {
+            if (!"Completed".equals(currentStatus) && !"Error".equals(currentStatus)) {
                 setStatus("Completed");
+                // Make sure the progress shows as 100% complete
+                this.progress.set(1.0);
             }
         } else {
-            setStatus("Processing");
+            // Only update to "Processing" if not in a special state like "Error"
+            String currentStatus = getStatus();
+            if ("Pending".equals(currentStatus) || "Processing".equals(currentStatus) || "Starting".equals(currentStatus)) {
+                setStatus("Processing");
+            }
         }
     }
     
@@ -145,6 +173,15 @@ public class ProcessingItem {
      */
     public void setStatus(String status) {
         this.status.set(status);
+    }
+    
+    /**
+     * Gets the unique ID of this processing item.
+     * 
+     * @return the UUID that uniquely identifies this item
+     */
+    public UUID getUuid() {
+        return uuid;
     }
     
     /**
@@ -208,5 +245,25 @@ public class ProcessingItem {
     public void resetForRetry() {
         setProgress(0.0);
         setStatus("Pending");
+    }
+    
+    /**
+     * Compares this ProcessingItem to another object.
+     * Two ProcessingItems are equal if they have the same UUID.
+     */
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        ProcessingItem other = (ProcessingItem) obj;
+        return uuid.equals(other.uuid);
+    }
+    
+    /**
+     * Returns a hash code value consistent with equals().
+     */
+    @Override
+    public int hashCode() {
+        return uuid.hashCode();
     }
 }
