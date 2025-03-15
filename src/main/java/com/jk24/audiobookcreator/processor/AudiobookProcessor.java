@@ -1,5 +1,7 @@
-package com.jk24.audiobookcreator;
+package com.jk24.audiobookcreator.processor;
 
+import com.jk24.audiobookcreator.model.Audiobook;
+import com.jk24.audiobookcreator.model.BookAudio;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;

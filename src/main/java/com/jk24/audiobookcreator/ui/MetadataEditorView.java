@@ -1,5 +1,6 @@
-package com.jk24.audiobookcreator;
+package com.jk24.audiobookcreator.ui;
 
+import com.jk24.audiobookcreator.model.Audiobook;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
