@@ -2,6 +2,7 @@ package com.jk24.audiobookcreator.processor;
 
 import com.jk24.audiobookcreator.model.Audiobook;
 import com.jk24.audiobookcreator.model.BookAudio;
+import com.jk24.audiobookcreator.service.PreferencesService;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -45,6 +46,8 @@ public class AudiobookProcessor {
     private ExecutorService executorService;
     private boolean multithreadingEnabled = true;
     private int numThreads = Runtime.getRuntime().availableProcessors();
+    private int audioBitRate = 128000;  // Default: Best quality
+    private int audioSamplingRate = 44100;  // Default: Best quality
     
     // Feature toggles
     private boolean metadataEnabled = true;
@@ -122,6 +125,24 @@ public class AudiobookProcessor {
      */
     public void setMetadataEnabled(boolean enabled) {
         this.metadataEnabled = enabled;
+    }
+    
+    /**
+     * Sets the audio bit rate to use for encoding.
+     * 
+     * @param bitRate the bit rate in bits per second (e.g., 64000, 128000)
+     */
+    public void setAudioBitRate(int bitRate) {
+        this.audioBitRate = bitRate;
+    }
+    
+    /**
+     * Sets the audio sampling rate to use for encoding.
+     * 
+     * @param samplingRate the sampling rate in Hz (e.g., 22050, 44100)
+     */
+    public void setAudioSamplingRate(int samplingRate) {
+        this.audioSamplingRate = samplingRate;
     }
     
     /**
@@ -602,9 +623,9 @@ public class AudiobookProcessor {
             
             AudioAttributes audioAttributes = new AudioAttributes();
             audioAttributes.setCodec("libmp3lame");
-            audioAttributes.setBitRate(128000);
+            audioAttributes.setBitRate(audioBitRate);
             audioAttributes.setChannels(2);
-            audioAttributes.setSamplingRate(44100);
+            audioAttributes.setSamplingRate(audioSamplingRate);
             
             EncodingAttributes encodingAttributes = new EncodingAttributes();
             encodingAttributes.setOutputFormat("mp3");
@@ -697,9 +718,9 @@ public class AudiobookProcessor {
                         
                         AudioAttributes audioAttributes = new AudioAttributes();
                         audioAttributes.setCodec("libmp3lame");
-                        audioAttributes.setBitRate(128000);
+                        audioAttributes.setBitRate(audioBitRate);
                         audioAttributes.setChannels(2);
-                        audioAttributes.setSamplingRate(44100);
+                        audioAttributes.setSamplingRate(audioSamplingRate);
                         
                         EncodingAttributes encodingAttributes = new EncodingAttributes();
                         encodingAttributes.setOutputFormat("mp3");
@@ -797,9 +818,9 @@ public class AudiobookProcessor {
     private void convertToM4B(File inputFile, File outputFile, Consumer<Double> progressCallback) throws EncoderException {
         AudioAttributes audioAttributes = new AudioAttributes();
         audioAttributes.setCodec("aac");
-        audioAttributes.setBitRate(128000);
+        audioAttributes.setBitRate(audioBitRate);
         audioAttributes.setChannels(2);
-        audioAttributes.setSamplingRate(44100);
+        audioAttributes.setSamplingRate(audioSamplingRate);
         
         EncodingAttributes encodingAttributes = new EncodingAttributes();
         encodingAttributes.setOutputFormat("ipod");

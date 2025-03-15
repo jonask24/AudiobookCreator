@@ -253,3 +253,46 @@
 .retry-button:hover {
    -fx-background-color: #8a2be2;          /* Lighter purple on hover */
 }
+
+/* ComboBox styling - prevent blue selection */
+.combo-box, .custom-combo-box {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.combo-box .list-cell, .custom-combo-box .list-cell {
+    -fx-background-color: transparent;
+}
+
+.combo-box-popup .list-view, .custom-combo-box-popup .list-view {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-border-color: #555555;
+}
+
+.combo-box-popup .list-cell, .custom-combo-box-popup .list-cell {
+    -fx-background-color: -fx-control-inner-background;
+    -fx-text-fill: -fx-text-base-color;
+}
+
+.combo-box-popup .list-cell:hover, .custom-combo-box-popup .list-cell:hover {
+    -fx-background-color: #444444;
+    -fx-text-fill: -fx-text-base-color;
+}
+
+.combo-box-popup .list-cell:selected, .custom-combo-box-popup .list-cell:selected {
+    -fx-background-color: #444444;
+    -fx-text-fill: -fx-text-base-color;
+}
+
+/* Custom ComboBox overrides - stronger styling to prevent blue highlight */
+.custom-combo-box {
+    -fx-mark-color: lightgray; /* Arrow color */
+    -fx-selection-bar: #444444;
+    -fx-accent: transparent;
+}
+
+.custom-combo-box-base:focused {
+    -fx-background-color: -fx-outer-border, -fx-inner-border, -fx-body-color;
+    -fx-background-insets: 0, 1, 2;
+    -fx-background-radius: 5, 4, 3;
+}

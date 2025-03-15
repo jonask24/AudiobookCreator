@@ -1,6 +1,7 @@
 package com.jk24.audiobookcreator.ui;
 
 import com.jk24.audiobookcreator.model.Audiobook;
+import com.jk24.audiobookcreator.model.BookAudio;
 import com.jk24.audiobookcreator.processor.AudiobookProcessor;
 import com.jk24.audiobookcreator.service.MetadataService;
 import com.jk24.audiobookcreator.service.PreferencesService;
@@ -12,6 +13,8 @@ import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.paint.Color;
+import javafx.scene.control.ListCell;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 import java.io.File;
@@ -19,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.jk24.audiobookcreator.util.FileSizeCalculator;
 
 /**
  * Main application class for the Audiobook Creator.
@@ -37,6 +41,8 @@ public class AudioMergerApp extends Application {
     private BorderPane centerPanel;               // Container for audiobook view
     private CheckBox darkModeCheckbox;            // Theme selection checkbox
     private Spinner<Integer> threadCountSpinner;  // Thread count control
+    private ComboBox<String> audioQualityComboBox; // Audio quality dropdown
+    private Label fileSizeLabel;                  // Label displaying estimated file size
     private ProcessingPanel processingPanel;      // Panel showing processing status
     
     // Data
@@ -71,6 +77,10 @@ public class AudioMergerApp extends Application {
         audiobookProcessor.setMultithreadingEnabled(useMultithreading);
         prefsService.setMultithreadingEnabled(useMultithreading);
         audiobookProcessor.setNumThreads(threadCount);
+        
+        // Configure audio quality settings
+        audiobookProcessor.setAudioBitRate(prefsService.getAudioBitRate());
+        audiobookProcessor.setAudioSamplingRate(prefsService.getAudioSamplingRate());
 
         // Create main layout container
         BorderPane mainLayout = new BorderPane();
@@ -91,6 +101,62 @@ public class AudioMergerApp extends Application {
         threadCountSpinner = new Spinner<>(1, 10, prefsService.getThreadCount());
         threadCountSpinner.setPrefWidth(70);
 
+        // Create audio quality dropdown with label
+        Label audioQualityLabel = new Label("Audio Quality");
+        audioQualityLabel.setStyle("-fx-font-size: 14px;");
+        audioQualityLabel.setTranslateY(5); // Align vertically
+        audioQualityComboBox = new ComboBox<>();
+        audioQualityComboBox.getItems().addAll(
+            PreferencesService.QUALITY_BEST,
+            PreferencesService.QUALITY_OPTIMIZED
+        );
+        audioQualityComboBox.setValue(prefsService.getAudioQuality());
+        audioQualityComboBox.setPrefWidth(80);
+        audioQualityComboBox.getStyleClass().add("custom-combo-box");
+        audioQualityComboBox.setStyle(
+            "-fx-focus-color: transparent; " +
+            "-fx-faint-focus-color: transparent; " +
+            "-fx-background-insets: 0, 0, 0, 0; " +
+            "-fx-background-color: -fx-shadow-highlight-color, -fx-outer-border, -fx-inner-border, -fx-body-color;"
+        );
+
+        // Create a cell factory that doesn't change colors on selection
+        audioQualityComboBox.setCellFactory(lv -> new ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setText(null);
+                } else {
+                    setText(item);
+                    // Force the text color based on theme
+                    setTextFill(prefsService.isDarkTheme() ? 
+                        Color.LIGHTGRAY : Color.BLACK);
+                }
+            }
+        });
+
+        // Also apply similar styling to the button cell (visible when dropdown is closed)
+        audioQualityComboBox.setButtonCell(new ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setText(null);
+                } else {
+                    setText(item);
+                    // Force the text color based on theme
+                    setTextFill(prefsService.isDarkTheme() ? 
+                        Color.LIGHTGRAY : Color.BLACK);
+                }
+            }
+        });
+
+        // Create file size label
+        fileSizeLabel = new Label("--");
+        fileSizeLabel.setStyle("-fx-font-size: 14px;");
+        fileSizeLabel.setTranslateY(5); // Align vertically
+
         // Add components to toolbar with separators for visual grouping
         toolbar.getChildren().addAll(
             bookFolderButton, 
@@ -98,7 +164,12 @@ public class AudioMergerApp extends Application {
             darkModeCheckbox,
             new Separator(javafx.geometry.Orientation.VERTICAL),
             threadCountLabel, 
-            threadCountSpinner
+            threadCountSpinner,
+            new Separator(javafx.geometry.Orientation.VERTICAL),
+            audioQualityLabel,
+            audioQualityComboBox,
+            new Separator(javafx.geometry.Orientation.VERTICAL),
+            fileSizeLabel
         );
         
         HBox.setHgrow(toolbar, Priority.ALWAYS);
@@ -156,11 +227,19 @@ public class AudioMergerApp extends Application {
             audiobookProcessor.setMultithreadingEnabled(isMultithreading);
         });
 
+        // Set up audio quality dropdown with saved preference
+        audioQualityComboBox.valueProperty().addListener((observable, oldValue, newValue) -> {
+            prefsService.setAudioQuality(newValue);
+            audiobookProcessor.setAudioBitRate(prefsService.getAudioBitRate());
+            audiobookProcessor.setAudioSamplingRate(prefsService.getAudioSamplingRate());
+            updateEstimatedFileSize();
+        });
+
         // Initialize with an empty audiobook
         createNewAudiobook();
 
         // Create and show the application window
-        scene = new Scene(mainLayout, 800, 600);
+        scene = new Scene(mainLayout, 850, 600);
         applyTheme(prefsService.getTheme());
         primaryStage.setScene(scene);
         primaryStage.show();
@@ -234,8 +313,10 @@ public class AudioMergerApp extends Application {
         // Create view for the new audiobook
         AudiobookView audiobookView = new AudiobookView(audiobook, prefsService, metadataService);
         audiobookView.setProcessButtonAction(event -> processCurrentAudiobook());
+        audiobookView.setOnAudioFilesChanged(this::updateEstimatedFileSize);
         centerPanel.setCenter(audiobookView);
         currentAudiobookView = audiobookView;
+        updateEstimatedFileSize(audiobook.getAudioFiles());
     }
     
     /**
@@ -260,8 +341,10 @@ public class AudioMergerApp extends Application {
         // Create view for the new audiobook
         AudiobookView audiobookView = new AudiobookView(audiobook, prefsService, metadataService);
         audiobookView.setProcessButtonAction(event -> processCurrentAudiobook());
+        audiobookView.setOnAudioFilesChanged(this::updateEstimatedFileSize);
         centerPanel.setCenter(audiobookView);
         currentAudiobookView = audiobookView;
+        updateEstimatedFileSize(audiobook.getAudioFiles());
     }
 
     /**
@@ -375,5 +458,28 @@ public class AudioMergerApp extends Application {
            System.err.println("Error applying theme: " + e.getMessage());
            e.printStackTrace();
        }
+    }
+
+    /**
+     * Updates the estimated file size label based on the current audio files and quality settings.
+     * 
+     * @param audioFiles The list of audio files to calculate the size for
+     */
+    private void updateEstimatedFileSize(List<BookAudio> audioFiles) {
+        boolean isHighQuality = PreferencesService.QUALITY_BEST.equals(prefsService.getAudioQuality());
+        long estimatedSize = FileSizeCalculator.calculateEstimatedSize(audioFiles, isHighQuality);
+        fileSizeLabel.setText(FileSizeCalculator.formatFileSize(estimatedSize));
+    }
+
+    /**
+     * Updates the estimated file size based on the current audiobook.
+     */
+    private void updateEstimatedFileSize() {
+        if (currentAudiobookView != null) {
+            updateEstimatedFileSize(currentAudiobookView.getAudiobook().getAudioFiles());
+        } else {
+            // No audiobook, show default message
+            fileSizeLabel.setText("--");
+        }
     }
 }
