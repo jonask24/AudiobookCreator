@@ -40,10 +40,10 @@ public class MetadataEditorView extends GridPane {
         bookNumberField = new TextField(String.valueOf(audiobook.getBookNumber()));
         
         // Set preferred widths to minimize unnecessary space
-        titleField.setPrefWidth(150);
-        authorField.setPrefWidth(150);
-        seriesField.setPrefWidth(150);
-        bookNumberField.setPrefWidth(150);
+        titleField.setPrefWidth(220);
+        authorField.setPrefWidth(220);
+        seriesField.setPrefWidth(220);
+        bookNumberField.setPrefWidth(220);
         
         // Add form controls
         add(new Label("Title"), 0, 0);
