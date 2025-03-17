@@ -26,10 +26,18 @@ public class PreferencesService {
     private static final String MULTITHREADING_ENABLED_KEY = "multithreadingEnabled";
     private static final String THREAD_COUNT_KEY = "threadCount";
     private static final String AUDIO_QUALITY_KEY = "audioQuality";
+    private static final String PREF_AUDIO_BITRATE = "audioBitRate";
+    private static final String PREF_AUDIO_SAMPLINGRATE = "audioSamplingRate";
 
     // Audio quality presets
     public static final String QUALITY_BEST = "Best";
     public static final String QUALITY_OPTIMIZED = "Book";
+    public static final int BEST_BITRATE = 128000;
+    public static final int OPTIMIZED_BITRATE = 64000;
+    public static final int BEST_SAMPLINGRATE = 44100;
+    public static final int OPTIMIZED_SAMPLINGRATE = 22050;
+    public static final int DEFAULT_BITRATE = BEST_BITRATE;
+    public static final int DEFAULT_SAMPLINGRATE = BEST_SAMPLINGRATE;
 
     // The underlying preferences store
     private final Preferences prefs;
@@ -45,6 +53,8 @@ public class PreferencesService {
     private boolean multithreadingEnabled;
     private int threadCount;
     private String audioQuality;
+    private int audioBitRate;
+    private int audioSamplingRate;
 
     /**
      * Creates a new preferences service and loads saved preferences.
@@ -94,6 +104,8 @@ public class PreferencesService {
 
         // Load audio quality preferences
         audioQuality = prefs.get(AUDIO_QUALITY_KEY, QUALITY_BEST);
+        audioBitRate = prefs.getInt(PREF_AUDIO_BITRATE, DEFAULT_BITRATE);
+        audioSamplingRate = prefs.getInt(PREF_AUDIO_SAMPLINGRATE, DEFAULT_SAMPLINGRATE);
     }
 
     /**
@@ -316,23 +328,82 @@ public class PreferencesService {
     public void setAudioQuality(String quality) {
         this.audioQuality = quality;
         prefs.put(AUDIO_QUALITY_KEY, quality);
+        
+        // Update bit rate and sampling rate to match the quality setting
+        if (QUALITY_BEST.equals(quality)) {
+            setAudioBitRate(BEST_BITRATE);
+            setAudioSamplingRate(BEST_SAMPLINGRATE);
+        } else if (QUALITY_OPTIMIZED.equals(quality)) {
+            setAudioBitRate(OPTIMIZED_BITRATE);
+            setAudioSamplingRate(OPTIMIZED_SAMPLINGRATE);
+        }
     }
 
     /**
      * Gets the bit rate based on the current audio quality setting.
      * 
-     * @return 128000 for best quality, 64000 for optimized quality
+     * @return the bit rate in bps
      */
     public int getAudioBitRate() {
-        return QUALITY_OPTIMIZED.equals(audioQuality) ? 64000 : 128000;
+        // Ensure the audio quality preference is respected
+        String quality = getAudioQuality();
+        
+        // Default to the stored bit rate
+        int bitRate = prefs.getInt(PREF_AUDIO_BITRATE, DEFAULT_BITRATE);
+        
+        // Override if quality setting doesn't match stored bit rate
+        if (QUALITY_BEST.equals(quality) && bitRate != BEST_BITRATE) {
+            bitRate = BEST_BITRATE;
+            setAudioBitRate(bitRate);
+        } else if (QUALITY_OPTIMIZED.equals(quality) && bitRate != OPTIMIZED_BITRATE) {
+            bitRate = OPTIMIZED_BITRATE;
+            setAudioBitRate(bitRate);
+        }
+        
+        return bitRate;
+    }
+
+    /**
+     * Sets and persists the audio bit rate.
+     * 
+     * @param bitRate the bit rate to use
+     */
+    public void setAudioBitRate(int bitRate) {
+        this.audioBitRate = bitRate;
+        prefs.putInt(PREF_AUDIO_BITRATE, bitRate);
     }
 
     /**
      * Gets the sampling rate based on the current audio quality setting.
      * 
-     * @return 44100 for best quality, 22050 for optimized quality
+     * @return the sampling rate in Hz
      */
     public int getAudioSamplingRate() {
-        return QUALITY_OPTIMIZED.equals(audioQuality) ? 22050 : 44100;
+        // Ensure the audio quality preference is respected
+        String quality = getAudioQuality();
+        
+        // Default to the stored sampling rate
+        int samplingRate = prefs.getInt(PREF_AUDIO_SAMPLINGRATE, DEFAULT_SAMPLINGRATE);
+        
+        // Override if quality setting doesn't match stored sampling rate
+        if (QUALITY_BEST.equals(quality) && samplingRate != BEST_SAMPLINGRATE) {
+            samplingRate = BEST_SAMPLINGRATE;
+            setAudioSamplingRate(samplingRate);
+        } else if (QUALITY_OPTIMIZED.equals(quality) && samplingRate != OPTIMIZED_SAMPLINGRATE) {
+            samplingRate = OPTIMIZED_SAMPLINGRATE;
+            setAudioSamplingRate(samplingRate);
+        }
+        
+        return samplingRate;
+    }
+
+    /**
+     * Sets and persists the audio sampling rate.
+     * 
+     * @param samplingRate the sampling rate to use
+     */
+    public void setAudioSamplingRate(int samplingRate) {
+        this.audioSamplingRate = samplingRate;
+        prefs.putInt(PREF_AUDIO_SAMPLINGRATE, samplingRate);
     }
 }

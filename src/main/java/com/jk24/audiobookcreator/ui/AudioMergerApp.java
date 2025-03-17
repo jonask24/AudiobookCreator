@@ -69,7 +69,9 @@ public class AudioMergerApp extends Application {
         // Initialize application services
         prefsService = new PreferencesService();
         metadataService = new MetadataService(prefsService);
-        audiobookProcessor = new AudiobookProcessor();
+        
+        // Create the processor with preferences for proper initialization
+        audiobookProcessor = new AudiobookProcessor(prefsService);
         
         // Configure processor with saved preferences
         int threadCount = prefsService.getThreadCount();
@@ -78,9 +80,10 @@ public class AudioMergerApp extends Application {
         prefsService.setMultithreadingEnabled(useMultithreading);
         audiobookProcessor.setNumThreads(threadCount);
         
-        // Configure audio quality settings
-        audiobookProcessor.setAudioBitRate(prefsService.getAudioBitRate());
-        audiobookProcessor.setAudioSamplingRate(prefsService.getAudioSamplingRate());
+        // Audio quality settings are already initialized in the constructor
+        String audioQuality = prefsService.getAudioQuality();
+        logger.info("Initial audio quality: {}, bit rate: {} bps, sampling rate: {} Hz", 
+            audioQuality, prefsService.getAudioBitRate(), prefsService.getAudioSamplingRate());
 
         // Create main layout container
         BorderPane mainLayout = new BorderPane();
@@ -181,6 +184,7 @@ public class AudioMergerApp extends Application {
         // Right side panel shows processing status
         processingPanel = new ProcessingPanel();
         processingPanel.setMinHeight(408);
+        processingPanel.setPreferencesService(prefsService); // Ensure this is set
         
         // Create layout to hold center content and processing panel
         HBox contentLayout = new HBox(10);
@@ -229,9 +233,31 @@ public class AudioMergerApp extends Application {
 
         // Set up audio quality dropdown with saved preference
         audioQualityComboBox.valueProperty().addListener((observable, oldValue, newValue) -> {
+            logger.info("Audio quality changed from '{}' to '{}'", oldValue, newValue);
+            
+            // Update preferences
             prefsService.setAudioQuality(newValue);
+            
+            // Apply updated audio settings from preferences to the processor
             audiobookProcessor.setAudioBitRate(prefsService.getAudioBitRate());
             audiobookProcessor.setAudioSamplingRate(prefsService.getAudioSamplingRate());
+            
+            // If there's a current audiobook, update its quality settings too
+            if (currentAudiobookView != null) {
+                Audiobook audiobook = currentAudiobookView.getAudiobook();
+                audiobook.setAudioQualitySettings(
+                    newValue,
+                    prefsService.getAudioBitRate(),
+                    prefsService.getAudioSamplingRate()
+                );
+                
+                logger.info("Updated current audiobook with new audio quality settings: quality={}, bitRate={} bps, samplingRate={} Hz",
+                    audiobook.getAudioQuality(), audiobook.getAudioBitRate(), audiobook.getAudioSamplingRate());
+            }
+            
+            logger.info("Updated audio processor with new settings - Bit Rate: {} bps, Sampling Rate: {} Hz",
+                prefsService.getAudioBitRate(), prefsService.getAudioSamplingRate());
+            
             updateEstimatedFileSize();
         });
 
@@ -239,7 +265,7 @@ public class AudioMergerApp extends Application {
         createNewAudiobook();
 
         // Create and show the application window
-        scene = new Scene(mainLayout, 850, 600);
+        scene = new Scene(mainLayout, 900, 600);
         applyTheme(prefsService.getTheme());
         primaryStage.setScene(scene);
         primaryStage.show();
@@ -302,6 +328,16 @@ public class AudioMergerApp extends Application {
         // Create a new audiobook
         Audiobook audiobook = new Audiobook();
         
+        // Set audio quality settings from preferences
+        audiobook.setAudioQualitySettings(
+            prefsService.getAudioQuality(),
+            prefsService.getAudioBitRate(),
+            prefsService.getAudioSamplingRate()
+        );
+        
+        logger.info("New audiobook created with audio quality settings: {}, bitRate: {} bps, samplingRate: {} Hz",
+            audiobook.getAudioQuality(), audiobook.getAudioBitRate(), audiobook.getAudioSamplingRate());
+        
         // Preserve metadata from previous audiobook if available
         if (currentAudiobookView != null) {
             Audiobook previousBook = currentAudiobookView.getAudiobook();
@@ -326,6 +362,16 @@ public class AudioMergerApp extends Application {
     private void createNewAudiobookWithoutPrompt() {
         // Create a new audiobook
         Audiobook audiobook = new Audiobook();
+        
+        // Set audio quality settings from preferences
+        audiobook.setAudioQualitySettings(
+            prefsService.getAudioQuality(),
+            prefsService.getAudioBitRate(),
+            prefsService.getAudioSamplingRate()
+        );
+        
+        logger.info("New audiobook created with audio quality settings: {}, bitRate: {} bps, samplingRate: {} Hz",
+            audiobook.getAudioQuality(), audiobook.getAudioBitRate(), audiobook.getAudioSamplingRate());
         
         // Preserve metadata from previous audiobook
         if (currentAudiobookView != null) {
@@ -366,6 +412,17 @@ public class AudioMergerApp extends Application {
         }
         
         logger.info("Processing audiobook: {}", audiobook.getTitle());
+        
+        // Get current audio quality settings from preferences
+        String currentQuality = prefsService.getAudioQuality();
+        int bitRate = prefsService.getAudioBitRate();
+        int samplingRate = prefsService.getAudioSamplingRate();
+        
+        // Store the current audio quality settings in the audiobook
+        audiobook.setAudioQualitySettings(currentQuality, bitRate, samplingRate);
+        
+        logger.info("Applied audio quality settings to audiobook: quality={}, bitRate={} bps, samplingRate={} Hz", 
+            currentQuality, bitRate, samplingRate);
         
         // Format filename with book number and title
         String formattedFilename = String.format("%02d %s.m4b", 
@@ -409,11 +466,17 @@ public class AudioMergerApp extends Application {
         
         logger.info("Processing audiobook to: {}", outputFile.getAbsolutePath());
         
+        // Log the audio quality settings that will be used for this book
+        logger.info("Using audiobook-specific audio quality settings: quality={}", audiobook.getAudioQuality());
+        logger.info("  - Bit Rate: {} bps", audiobook.getAudioBitRate());
+        logger.info("  - Sampling Rate: {} Hz", audiobook.getAudioSamplingRate());
+        
         // Get cover image from current view
         File coverImage = currentAudiobookView.getCurrentCoverImage();
         
         // Add to processing queue and start processing
-        processingPanel.processAudiobook(audiobookProcessor, audiobook, outputFile, coverImage)
+        // Now the audiobook contains its own quality settings to be used during processing
+        processingPanel.processAudiobook(audiobookProcessor, audiobook, outputFile, coverImage, prefsService)
             .exceptionally(ex -> {
                 logger.error("Error processing audiobook", ex);
                 return null;
