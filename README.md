@@ -1,7 +1,7 @@
 # Audiobook Creator
 A desktop application for creating and managing audiobooks from various audio file formats. This tool helps you combine multiple audio files into a single M4B audiobook file with proper metadata and cover art.
 
-<img src="./screenshots/DarkModeDemonstration.png" alt="" width="600" />
+<img src="./screenshots/DarkModeDemonstrationV2.PNG" alt="" width="600" />
 
 ## Features
 - **Audio File Management**: Add, remove, and reorder audio files with intuitive controls
