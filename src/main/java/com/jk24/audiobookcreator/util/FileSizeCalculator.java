@@ -83,11 +83,11 @@ public class FileSizeCalculator {
         if (bytes < 1024) {
             return bytes + " B";
         } else if (bytes < 1024 * 1024) {
-            return df.format(bytes / 1024.0) + " KB";
+            return Math.round(bytes / 1024.0) + " KB";
         } else if (bytes < 1024 * 1024 * 1024) {
-            return df.format(bytes / (1024.0 * 1024.0)) + " MB";
+            return Math.round(bytes / (1024.0 * 1024.0)) + " MB";
         } else {
-            return df.format(bytes / (1024.0 * 1024.0 * 1024.0)) + " GB";
+            return Math.round(bytes / (1024.0 * 1024.0 * 1024.0)) + " GB";
         }
     }
 }
