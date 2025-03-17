@@ -14,6 +14,7 @@ A desktop application for creating and managing audiobooks from various audio fi
 - **Multi-threading**: Parallel processing for faster conversion of large audiobooks
 - **Dark/Light Themes**: Choose your preferred visual style
 - **Processing Queue**: Process multiple audiobooks simultaneously with visual progress tracking
+- **Audio Quality Choice**: Choose between very high audio quality or reasonable audio quality for books at half the file size
 - **Cross-Platform**: Available as native installers for Windows and Linux, with a universal JAR that runs anywhere Java is installed
 - **Privacy Friendly**: Works completely offline with no data collection
 
