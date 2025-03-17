@@ -2,6 +2,7 @@ package com.jk24.audiobookcreator.processor;
 
 import com.jk24.audiobookcreator.model.Audiobook;
 import com.jk24.audiobookcreator.model.BookAudio;
+import com.jk24.audiobookcreator.service.PreferencesService;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -45,6 +46,8 @@ public class AudiobookProcessor {
     private ExecutorService executorService;
     private boolean multithreadingEnabled = true;
     private int numThreads = Runtime.getRuntime().availableProcessors();
+    private int audioBitRate = 128000;  // Default: Best quality
+    private int audioSamplingRate = 44100;  // Default: Best quality
     
     // Feature toggles
     private boolean metadataEnabled = true;
@@ -55,6 +58,33 @@ public class AudiobookProcessor {
      * available processors.
      */
     public AudiobookProcessor() {
+        initializeExecutor();
+    }
+    
+    /**
+     * Creates a new processor instance with settings from PreferencesService.
+     * This constructor configures multithreading and audio quality settings
+     * based on the provided preferences.
+     * 
+     * @param preferencesService the preferences service to use for configuration
+     */
+    public AudiobookProcessor(PreferencesService preferencesService) {
+        if (preferencesService != null) {
+            // Configure multithreading
+            this.multithreadingEnabled = preferencesService.isMultithreadingEnabled();
+            this.numThreads = preferencesService.getThreadCount();
+            
+            // Configure audio quality settings
+            this.audioBitRate = preferencesService.getAudioBitRate();
+            this.audioSamplingRate = preferencesService.getAudioSamplingRate();
+            
+            System.out.println("AudiobookProcessor initialized with preferences:");
+            System.out.println("- Multithreading: " + this.multithreadingEnabled);
+            System.out.println("- Thread count: " + this.numThreads);
+            System.out.println("- Audio bit rate: " + this.audioBitRate + " bps");
+            System.out.println("- Audio sampling rate: " + this.audioSamplingRate + " Hz");
+        }
+        
         initializeExecutor();
     }
     
@@ -125,6 +155,58 @@ public class AudiobookProcessor {
     }
     
     /**
+     * Sets the audio bit rate to use for encoding.
+     * 
+     * @param bitRate the bit rate in bits per second (e.g., 64000, 128000)
+     */
+    public void setAudioBitRate(int bitRate) {
+        System.out.println("----------------------------------------------------");
+        System.out.println("Changing audio bit rate from " + this.audioBitRate + " to " + bitRate + " bps");
+        System.out.println("----------------------------------------------------");
+        this.audioBitRate = bitRate;
+       
+       // Force a log entry with the current settings after change
+       System.out.println("Current Audio Settings After Change:");
+       System.out.println("Bit Rate: " + this.audioBitRate + " bps");
+       System.out.println("Sampling Rate: " + this.audioSamplingRate + " Hz");
+    }
+    
+    /**
+     * Gets the current audio bit rate setting.
+     * 
+     * @return the bit rate in bits per second
+     */
+    public int getAudioBitRate() {
+        return audioBitRate;
+    }
+    
+    /**
+     * Sets the audio sampling rate to use for encoding.
+     * 
+     * @param samplingRate the sampling rate in Hz (e.g., 22050, 44100)
+     */
+    public void setAudioSamplingRate(int samplingRate) {
+        System.out.println("----------------------------------------------------");
+        System.out.println("Changing audio sampling rate from " + this.audioSamplingRate + " to " + samplingRate + " Hz");
+        System.out.println("----------------------------------------------------");
+        this.audioSamplingRate = samplingRate;
+       
+       // Force a log entry with the current settings after change
+       System.out.println("Current Audio Settings After Change:");
+       System.out.println("Bit Rate: " + this.audioBitRate + " bps"); 
+       System.out.println("Sampling Rate: " + this.audioSamplingRate + " Hz");
+    }
+    
+    /**
+     * Gets the current audio sampling rate setting.
+     * 
+     * @return the sampling rate in Hz
+     */
+    public int getAudioSamplingRate() {
+        return audioSamplingRate;
+    }
+    
+    /**
      * Processes an audiobook asynchronously with the specified output file and cover image.
      * This method merges all audio files in the audiobook, converts them to M4B format,
      * and applies metadata including the cover image if provided.
@@ -133,13 +215,25 @@ public class AudiobookProcessor {
      * @param outputFile the destination file for the processed audiobook
      * @param coverImage optional cover image (can be null)
      * @param progressCallback callback function to receive progress updates
+     * @param preferencesService optional preferences service (can be null)
      * @return a CompletableFuture that completes with the output file when processing is done
      */
     public CompletableFuture<File> processAudiobook(
             Audiobook audiobook, 
             File outputFile, 
             File coverImage,
-            Consumer<Double> progressCallback) {
+            Consumer<Double> progressCallback,
+            PreferencesService preferencesService) {
+        
+        // Get audio quality settings directly from the audiobook
+        final int audioBitRateToUse = audiobook.getAudioBitRate();
+        final int audioSamplingRateToUse = audiobook.getAudioSamplingRate();
+        
+        // Store the settings to use for this specific processing job
+        System.out.println("Using audiobook-specific audio settings for processing:");
+        System.out.println("  - Quality preset: " + audiobook.getAudioQuality());
+        System.out.println("  - Bit Rate: " + audioBitRateToUse + " bps");
+        System.out.println("  - Sampling Rate: " + audioSamplingRateToUse + " Hz");
         
         // Initialize progress notification
         if (progressCallback != null) {
@@ -160,9 +254,11 @@ public class AudiobookProcessor {
                 if (finalProgressCallback != null) {
                     finalProgressCallback.accept(0.01); // Started processing
                 }
-               
-                // Process the files
-                mergeFiles(files, outputFile, audiobook, coverImage, finalProgressCallback);
+                
+                // Process the files using the audiobook's quality settings directly
+                // No need to modify shared class variables anymore
+                mergeFiles(files, outputFile, audiobook, coverImage, finalProgressCallback, 
+                         audioBitRateToUse, audioSamplingRateToUse);
                 
                 // Ensure we send a final 100% progress update
                 if (finalProgressCallback != null) {
@@ -196,11 +292,24 @@ public class AudiobookProcessor {
             File outputFile, 
             Consumer<Double> progressCallback) {
         // Call the full method with null for coverImage
-        return processAudiobook(audiobook, outputFile, null, progressCallback);
+        return processAudiobook(audiobook, outputFile, null, progressCallback, null);
+    }
+    
+    /**
+     * Overload method for backward compatibility
+     */
+    public CompletableFuture<File> processAudiobook(
+            Audiobook audiobook, 
+            File outputFile, 
+            File coverImage,
+            Consumer<Double> progressCallback) {
+        
+        return processAudiobook(audiobook, outputFile, coverImage, progressCallback, null);
     }
     
     /**
      * Processes multiple audiobooks in parallel, creating an M4B file for each.
+     * Each audiobook will be processed with its own quality settings.
      * 
      * @param audiobooks list of audiobooks to process
      * @param outputDirectory destination directory for output files
@@ -216,6 +325,7 @@ public class AudiobookProcessor {
                 .map(audiobook -> {
                     String filename = sanitizeFilename(audiobook.getTitle()) + ".m4b";
                     File outputFile = new File(outputDirectory, filename);
+                    // Each audiobook is processed with its own quality settings
                     return processAudiobook(audiobook, outputFile, progressCallback);
                 })
                 .toList();
@@ -234,14 +344,16 @@ public class AudiobookProcessor {
         }
         
         // Remove characters that are typically not allowed in filenames
+        // Replace all characters illegal in filenames across operating systems with hyphens
+        // This ensures consistent filename sanitization for Windows, macOS, and Linux
         return input.replace('/', '-')
                 .replace('\\', '-')
                 .replace(':', '-')
                 .replace('*', '-')
                 .replace('?', '-')
-                .replace('"', '\'')
-                .replace('<', '(')
-                .replace('>', ')')
+                .replace('"', '-')
+                .replace('<', '-')
+                .replace('>', '-')
                 .replace('|', '-');
     }
     
@@ -268,21 +380,23 @@ public class AudiobookProcessor {
      * @param audiobook the audiobook containing metadata
      * @param coverImage optional cover image file
      * @param progressCallback callback for progress updates
+     * @param bitRate explicit bit rate to use (e.g. 64000 or 128000)
+     * @param samplingRate explicit sampling rate to use (e.g. 22050 or 44100)
      * @throws IOException if an I/O error occurs
      * @throws EncoderException if there's an error during encoding
      */
-    public void mergeFiles(List<File> inputFiles, File outputFile, Audiobook audiobook, File coverImage, Consumer<Double> progressCallback) throws IOException, EncoderException {
+    public void mergeFiles(List<File> inputFiles, File outputFile, Audiobook audiobook, File coverImage, Consumer<Double> progressCallback, int bitRate, int samplingRate) throws IOException, EncoderException {
         if (inputFiles.isEmpty()) {
             throw new IllegalArgumentException("No input files provided");
         }
         
-        // Special case: If we have a single M4B file, just update its metadata
-        if (inputFiles.size() == 1 && inputFiles.get(0).getName().toLowerCase().endsWith(".m4b")) {
-            File inputM4b = inputFiles.get(0);
-            handleSingleM4bFile(inputM4b, outputFile, audiobook, coverImage, progressCallback);
-            return;
-        }
-        
+        // Output the audio settings that will be used for this merge operation
+        System.out.println("----------------------------------------------------");
+        System.out.println("mergeFiles using the following audio settings:");
+        System.out.println("- Bit Rate: " + bitRate + " bps");
+        System.out.println("- Sampling Rate: " + samplingRate + " Hz");
+        System.out.println("----------------------------------------------------");
+
         // Create a temporary directory to store intermediate files
         File tempDir = Files.createTempDirectory("audio_merger").toFile();
         tempDir.deleteOnExit();
@@ -291,9 +405,9 @@ public class AudiobookProcessor {
             // Step 1: Convert all files to the same format (with multithreading if enabled)
             List<File> convertedFiles;
             if (multithreadingEnabled && numThreads > 1) {
-                convertedFiles = convertFilesParallel(inputFiles, tempDir, progressCallback);
+                convertedFiles = convertFilesParallel(inputFiles, tempDir, progressCallback, bitRate, samplingRate);
             } else {
-                convertedFiles = convertFiles(inputFiles, tempDir, progressCallback);
+                convertedFiles = convertFiles(inputFiles, tempDir, progressCallback, bitRate, samplingRate);
             }
             
             // Step 2: Concatenate all files
@@ -304,10 +418,14 @@ public class AudiobookProcessor {
             File finalOutputFile;
             if (metadataEnabled) {
                 File tempOutputFile = new File(tempDir, "pre_metadata.m4b");
-                convertToM4B(mergedRawFile, tempOutputFile, progressCallback);
+                System.out.println("Converting to M4B with settings: " + bitRate + "bps, " + samplingRate + "Hz");
+                // Always use explicit bit rate and sampling rate
+                convertToM4B(mergedRawFile, tempOutputFile, progressCallback, bitRate, samplingRate);
                 finalOutputFile = applyMetadata(tempOutputFile, outputFile, audiobook, coverImage, progressCallback);
             } else {
-                convertToM4B(mergedRawFile, outputFile, progressCallback);
+                System.out.println("Converting to M4B with settings: " + bitRate + "bps, " + samplingRate + "Hz");
+                // Always use explicit bit rate and sampling rate
+                convertToM4B(mergedRawFile, outputFile, progressCallback, bitRate, samplingRate);
                 finalOutputFile = outputFile;
             }
             
@@ -327,15 +445,10 @@ public class AudiobookProcessor {
     
     /**
      * Handles a single M4B file by updating its metadata and copying it to the output location.
-     * This optimization avoids unnecessary conversion when the input is already in M4B format.
      * 
-     * NOTE: This method has been enhanced with simulated progress updates to ensure
-     * progress bars update smoothly in the UI. Since the actual work is much faster than
-     * a normal conversion, we add strategic simulation points to make progress bars behave
-     * similarly to normal processing, creating a consistent user experience.
-     * 
-     * The UI will detect this optimization path by monitoring the pattern of progress values:
-     * 0.01 -> 0.1 -> big jump to 0.4, which is a signature of direct M4B processing.
+     * @deprecated This method is no longer used - all files including M4B files now go through 
+     * the full conversion process. This avoids inconsistencies and ensures all outputs have the 
+     * same encoding parameters.
      * 
      * @param inputFile The source M4B file
      * @param outputFile The destination file
@@ -344,6 +457,7 @@ public class AudiobookProcessor {
      * @param progressCallback Callback for progress updates
      * @throws IOException if an I/O error occurs
      */
+    @Deprecated
     private void handleSingleM4bFile(File inputFile, File outputFile, Audiobook audiobook, File coverImage, Consumer<Double> progressCallback) throws IOException {
         try {
             // Make a full sequence of progress updates to simulate regular processing stages
@@ -586,10 +700,12 @@ public class AudiobookProcessor {
      * @param inputFiles list of files to convert
      * @param tempDir temporary directory for converted files
      * @param progressCallback callback for progress updates
+     * @param bitRate explicit bit rate to use (e.g. 64000 or 128000)
+     * @param samplingRate explicit sampling rate to use (e.g. 22050 or 44100)
      * @return list of converted files
      * @throws EncoderException if encoding fails
      */
-    private List<File> convertFiles(List<File> inputFiles, File tempDir, Consumer<Double> progressCallback) throws EncoderException {
+    private List<File> convertFiles(List<File> inputFiles, File tempDir, Consumer<Double> progressCallback, final int bitRate, final int samplingRate) throws EncoderException {
         List<File> convertedFiles = new ArrayList<>();
         int totalFiles = inputFiles.size();
         
@@ -598,11 +714,18 @@ public class AudiobookProcessor {
             File outputFile = new File(tempDir, i + "_converted.mp3");
             final int fileIndex = i;
             
+           // Debug log to verify settings are being applied
+           System.out.println("----------------------------------------------------");
+           System.out.println("Converting file " + (i+1) + "/" + inputFiles.size() + " to MP3 with quality settings:");
+           System.out.println("Bit Rate: " + bitRate + " bps");
+           System.out.println("Sampling Rate: " + samplingRate + " Hz");
+           System.out.println("----------------------------------------------------");
+           
             AudioAttributes audioAttributes = new AudioAttributes();
             audioAttributes.setCodec("libmp3lame");
-            audioAttributes.setBitRate(128000);
+            audioAttributes.setBitRate(bitRate);
             audioAttributes.setChannels(2);
-            audioAttributes.setSamplingRate(44100);
+            audioAttributes.setSamplingRate(samplingRate);
             
             EncodingAttributes encodingAttributes = new EncodingAttributes();
             encodingAttributes.setOutputFormat("mp3");
@@ -641,10 +764,12 @@ public class AudiobookProcessor {
      * @param inputFiles list of files to convert
      * @param tempDir temporary directory for converted files
      * @param progressCallback callback for progress updates
+     * @param bitRate explicit bit rate to use (e.g. 64000 or 128000)
+     * @param samplingRate explicit sampling rate to use (e.g. 22050 or 44100)
      * @return list of converted files in the original order
      * @throws EncoderException if encoding fails
      */
-    private List<File> convertFilesParallel(List<File> inputFiles, File tempDir, Consumer<Double> progressCallback) throws EncoderException {
+    private List<File> convertFilesParallel(List<File> inputFiles, File tempDir, Consumer<Double> progressCallback, final int bitRate, final int samplingRate) throws EncoderException {
         int totalFiles = inputFiles.size();
         
         // Pre-create the output files list to maintain the correct order
@@ -693,11 +818,18 @@ public class AudiobookProcessor {
                         File inputFile = inputFiles.get(fileIndex);
                         File outputFile = convertedFiles.get(fileIndex);
                         
+                       // Debug log to verify settings are being applied
+                       System.out.println("----------------------------------------------------");
+                       System.out.println("Converting file " + (fileIndex+1) + "/" + totalFiles + " in parallel with quality settings:");
+                       System.out.println("Bit Rate: " + bitRate + " bps");
+                       System.out.println("Sampling Rate: " + samplingRate + " Hz");
+                       System.out.println("----------------------------------------------------");
+                       
                         AudioAttributes audioAttributes = new AudioAttributes();
                         audioAttributes.setCodec("libmp3lame");
-                        audioAttributes.setBitRate(128000);
+                        audioAttributes.setBitRate(bitRate);
                         audioAttributes.setChannels(2);
-                        audioAttributes.setSamplingRate(44100);
+                        audioAttributes.setSamplingRate(samplingRate);
                         
                         EncodingAttributes encodingAttributes = new EncodingAttributes();
                         encodingAttributes.setOutputFormat("mp3");
@@ -784,21 +916,59 @@ public class AudiobookProcessor {
     
     /**
      * Converts an audio file to M4B format.
-     * This uses the JAVE library to convert to the iPod format, which produces an M4B file
-     * compatible with most audiobook players.
+     * This method is a backward compatibility wrapper and should not be used in new code.
+     * Use the version with explicit quality parameters instead.
      * 
+     * @deprecated Use convertToM4B with explicit quality parameters instead
      * @param inputFile input audio file
      * @param outputFile output M4B file
      * @param progressCallback callback for progress updates
      * @throws EncoderException if encoding fails
      */
+    @Deprecated
     private void convertToM4B(File inputFile, File outputFile, Consumer<Double> progressCallback) throws EncoderException {
+        // WARNING: This method uses shared class variables and is not thread-safe
+        // It should only be used by legacy code or in cases where thread safety is not a concern
+        System.out.println("----------------------------------------------------");
+        System.out.println("WARNING: Using non-thread-safe convertToM4B method");
+        System.out.println("Converting to M4B using current processor settings:");
+        System.out.println("- Bit Rate: " + audioBitRate + " bps");
+        System.out.println("- Sampling Rate: " + audioSamplingRate + " Hz");
+        System.out.println("----------------------------------------------------");
+        
+        // Forward to the full version of the method with current quality settings
+        convertToM4B(inputFile, outputFile, progressCallback, audioBitRate, audioSamplingRate);
+    }
+   
+   /**
+    * Converts an audio file to M4B format with explicit quality settings.
+    * This uses the JAVE library to convert to the iPod format, which produces an M4B file
+    * compatible with most audiobook players.
+    * 
+    * @param inputFile input audio file
+    * @param outputFile output M4B file
+    * @param progressCallback callback for progress updates
+    * @param bitRate explicit bit rate to use (e.g. 64000 or 128000)
+    * @param samplingRate explicit sampling rate to use (e.g. 22050 or 44100)
+    * @throws EncoderException if encoding fails
+    */
+   private void convertToM4B(File inputFile, File outputFile, Consumer<Double> progressCallback, 
+                           int bitRate, int samplingRate) throws EncoderException {
+        // Debug log to verify settings are being applied
+        System.out.println("----------------------------------------------------");
+        System.out.println("Converting to M4B with quality settings:");
+        System.out.println("Bit Rate: " + bitRate + " bps");
+        System.out.println("Sampling Rate: " + samplingRate + " Hz");
+        System.out.println("----------------------------------------------------");
+        
+        // Configure audio attributes with explicit quality settings
         AudioAttributes audioAttributes = new AudioAttributes();
         audioAttributes.setCodec("aac");
-        audioAttributes.setBitRate(128000);
+        audioAttributes.setBitRate(bitRate);
         audioAttributes.setChannels(2);
-        audioAttributes.setSamplingRate(44100);
+        audioAttributes.setSamplingRate(samplingRate);
         
+        // Configure encoding attributes
         EncodingAttributes encodingAttributes = new EncodingAttributes();
         encodingAttributes.setOutputFormat("ipod");
         encodingAttributes.setAudioAttributes(audioAttributes);
@@ -808,25 +978,29 @@ public class AudiobookProcessor {
             progressCallback.accept(0.8); // Start at 80%
         }
         
+        // Create encoder and start conversion
         Encoder encoder = new Encoder();
         encoder.encode(new MultimediaObject(inputFile), outputFile, encodingAttributes,
             new EncoderProgressListener() {
                 @Override
                 public void sourceInfo(MultimediaInfo info) {}
-               
-               @Override
-               public void progress(int permil) {
+                
+                @Override
+                public void progress(int permil) {
                     if (progressCallback != null) {
                         // Only use 80-90% of the progress bar if we're adding metadata later
                         double progressRange = metadataEnabled ? 0.1 : 0.2;
                         double progress = Math.min(0.8 + (permil / 1000.0 * progressRange), 0.9);
-                       progressCallback.accept(progress);
-                   }
-               }
-               
-               @Override
-               public void message(String s) {}
-           });
+                        progressCallback.accept(progress);
+                    }
+                }
+                
+                @Override
+                public void message(String s) {
+                    // Log any encoder messages for debugging
+                    System.out.println("Encoder message: " + s);
+                }
+            });
     }
 }
 

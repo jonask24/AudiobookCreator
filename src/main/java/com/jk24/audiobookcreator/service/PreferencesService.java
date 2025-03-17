@@ -25,10 +25,23 @@ public class PreferencesService {
     private static final String PREVIOUS_BOOK_NUMBER_KEY = "prevBookNumber";
     private static final String MULTITHREADING_ENABLED_KEY = "multithreadingEnabled";
     private static final String THREAD_COUNT_KEY = "threadCount";
-    
+    private static final String AUDIO_QUALITY_KEY = "audioQuality";
+    private static final String PREF_AUDIO_BITRATE = "audioBitRate";
+    private static final String PREF_AUDIO_SAMPLINGRATE = "audioSamplingRate";
+
+    // Audio quality presets
+    public static final String QUALITY_BEST = "Best";
+    public static final String QUALITY_OPTIMIZED = "Book";
+    public static final int BEST_BITRATE = 128000;
+    public static final int OPTIMIZED_BITRATE = 64000;
+    public static final int BEST_SAMPLINGRATE = 44100;
+    public static final int OPTIMIZED_SAMPLINGRATE = 22050;
+    public static final int DEFAULT_BITRATE = BEST_BITRATE;
+    public static final int DEFAULT_SAMPLINGRATE = BEST_SAMPLINGRATE;
+
     // The underlying preferences store
     private final Preferences prefs;
-    
+
     // Current values
     private File bookFolder;
     private File outputFolder;
@@ -39,7 +52,10 @@ public class PreferencesService {
     private int previousBookNumber;
     private boolean multithreadingEnabled;
     private int threadCount;
-    
+    private String audioQuality;
+    private int audioBitRate;
+    private int audioSamplingRate;
+
     /**
      * Creates a new preferences service and loads saved preferences.
      * Default values are provided for preferences that haven't been set.
@@ -48,7 +64,7 @@ public class PreferencesService {
         prefs = Preferences.userNodeForPackage(PreferencesService.class);
         loadPreferences();
     }
-    
+
     /**
      * Loads all preferences from the persistent store.
      * This method validates file paths and sets reasonable defaults
@@ -63,7 +79,7 @@ public class PreferencesService {
                 bookFolder = null;
             }
         }
-        
+
         // Load output folder
         String savedOutputPath = prefs.get(OUTPUT_FOLDER_KEY, null);
         if (savedOutputPath != null) {
@@ -72,21 +88,26 @@ public class PreferencesService {
                 outputFolder = null;
             }
         }
-        
+
         // Load theme
         theme = prefs.get(THEME_KEY, "light");
-        
+
         // Load previous book info
         previousBookTitle = prefs.get(PREVIOUS_BOOK_TITLE_KEY, "");
         previousBookAuthor = prefs.get(PREVIOUS_BOOK_AUTHOR_KEY, "");
         previousBookSeries = prefs.get(PREVIOUS_BOOK_SERIES_KEY, "");
         previousBookNumber = prefs.getInt(PREVIOUS_BOOK_NUMBER_KEY, 1);
-       
+
         // Load multithreading preferences
         multithreadingEnabled = prefs.getBoolean(MULTITHREADING_ENABLED_KEY, true);
         threadCount = prefs.getInt(THREAD_COUNT_KEY, Runtime.getRuntime().availableProcessors());
+
+        // Load audio quality preferences
+        audioQuality = prefs.get(AUDIO_QUALITY_KEY, QUALITY_BEST);
+        audioBitRate = prefs.getInt(PREF_AUDIO_BITRATE, DEFAULT_BITRATE);
+        audioSamplingRate = prefs.getInt(PREF_AUDIO_SAMPLINGRATE, DEFAULT_SAMPLINGRATE);
     }
-    
+
     /**
      * Gets the current book folder.
      * 
@@ -95,7 +116,7 @@ public class PreferencesService {
     public File getBookFolder() {
         return bookFolder;
     }
-    
+
     /**
      * Sets and persists the book folder.
      * 
@@ -109,7 +130,7 @@ public class PreferencesService {
             prefs.remove(BOOK_FOLDER_KEY);
         }
     }
-    
+
     /**
      * Gets the current output folder.
      * 
@@ -118,7 +139,7 @@ public class PreferencesService {
     public File getOutputFolder() {
         return outputFolder;
     }
-    
+
     /**
      * Sets and persists the output folder.
      * 
@@ -132,7 +153,7 @@ public class PreferencesService {
             prefs.remove(OUTPUT_FOLDER_KEY);
         }
     }
-    
+
     /**
      * Gets the current theme name.
      * 
@@ -141,7 +162,7 @@ public class PreferencesService {
     public String getTheme() {
         return theme;
     }
-    
+
     /**
      * Sets and persists the theme.
      * 
@@ -151,7 +172,7 @@ public class PreferencesService {
         this.theme = theme;
         prefs.put(THEME_KEY, theme);
     }
-    
+
     /**
      * Convenience method to check if dark theme is active.
      * 
@@ -160,7 +181,7 @@ public class PreferencesService {
     public boolean isDarkTheme() {
         return "dark".equals(theme);
     }
-    
+
     /**
      * Gets the previous book title from preferences.
      * 
@@ -169,7 +190,7 @@ public class PreferencesService {
     public String getPreviousBookTitle() {
         return previousBookTitle;
     }
-    
+
     /**
      * Sets and persists the previous book title.
      * 
@@ -179,7 +200,7 @@ public class PreferencesService {
         this.previousBookTitle = title;
         prefs.put(PREVIOUS_BOOK_TITLE_KEY, title);
     }
-    
+
     /**
      * Gets the previous book author from preferences.
      * 
@@ -188,7 +209,7 @@ public class PreferencesService {
     public String getPreviousBookAuthor() {
         return previousBookAuthor;
     }
-    
+
     /**
      * Sets and persists the previous book author.
      * 
@@ -198,7 +219,7 @@ public class PreferencesService {
         this.previousBookAuthor = author;
         prefs.put(PREVIOUS_BOOK_AUTHOR_KEY, author);
     }
-    
+
     /**
      * Gets the previous book series from preferences.
      * 
@@ -207,7 +228,7 @@ public class PreferencesService {
     public String getPreviousBookSeries() {
         return previousBookSeries;
     }
-    
+
     /**
      * Sets and persists the previous book series.
      * 
@@ -217,7 +238,7 @@ public class PreferencesService {
         this.previousBookSeries = series;
         prefs.put(PREVIOUS_BOOK_SERIES_KEY, series);
     }
-    
+
     /**
      * Gets the previous book number from preferences.
      * 
@@ -226,7 +247,7 @@ public class PreferencesService {
     public int getPreviousBookNumber() {
         return previousBookNumber;
     }
-    
+
     /**
      * Sets and persists the previous book number.
      * 
@@ -236,7 +257,7 @@ public class PreferencesService {
         this.previousBookNumber = number;
         prefs.putInt(PREVIOUS_BOOK_NUMBER_KEY, number);
     }
-    
+
     /**
      * Convenience method to save all book metadata at once.
      * 
@@ -251,7 +272,7 @@ public class PreferencesService {
         setPreviousBookSeries(series);
         setPreviousBookNumber(number);
     }
-    
+
     /**
      * Checks if multithreading is enabled.
      * 
@@ -260,7 +281,7 @@ public class PreferencesService {
     public boolean isMultithreadingEnabled() {
         return multithreadingEnabled;
     }
-    
+
     /**
      * Sets and persists the multithreading enabled setting.
      * 
@@ -270,7 +291,7 @@ public class PreferencesService {
         this.multithreadingEnabled = enabled;
         prefs.putBoolean(MULTITHREADING_ENABLED_KEY, enabled);
     }
-    
+
     /**
      * Gets the thread count for multithreaded processing.
      * 
@@ -279,7 +300,7 @@ public class PreferencesService {
     public int getThreadCount() {
         return threadCount;
     }
-    
+
     /**
      * Sets and persists the thread count.
      * 
@@ -288,5 +309,101 @@ public class PreferencesService {
     public void setThreadCount(int count) {
         this.threadCount = count;
         prefs.putInt(THREAD_COUNT_KEY, count);
+    }
+
+    /**
+     * Gets the audio quality setting.
+     * 
+     * @return the audio quality setting (QUALITY_BEST or QUALITY_OPTIMIZED)
+     */
+    public String getAudioQuality() {
+        return audioQuality;
+    }
+
+    /**
+     * Sets and persists the audio quality setting.
+     * 
+     * @param quality the audio quality to use (QUALITY_BEST or QUALITY_OPTIMIZED)
+     */
+    public void setAudioQuality(String quality) {
+        this.audioQuality = quality;
+        prefs.put(AUDIO_QUALITY_KEY, quality);
+        
+        // Update bit rate and sampling rate to match the quality setting
+        if (QUALITY_BEST.equals(quality)) {
+            setAudioBitRate(BEST_BITRATE);
+            setAudioSamplingRate(BEST_SAMPLINGRATE);
+        } else if (QUALITY_OPTIMIZED.equals(quality)) {
+            setAudioBitRate(OPTIMIZED_BITRATE);
+            setAudioSamplingRate(OPTIMIZED_SAMPLINGRATE);
+        }
+    }
+
+    /**
+     * Gets the bit rate based on the current audio quality setting.
+     * 
+     * @return the bit rate in bps
+     */
+    public int getAudioBitRate() {
+        // Ensure the audio quality preference is respected
+        String quality = getAudioQuality();
+        
+        // Default to the stored bit rate
+        int bitRate = prefs.getInt(PREF_AUDIO_BITRATE, DEFAULT_BITRATE);
+        
+        // Override if quality setting doesn't match stored bit rate
+        if (QUALITY_BEST.equals(quality) && bitRate != BEST_BITRATE) {
+            bitRate = BEST_BITRATE;
+            setAudioBitRate(bitRate);
+        } else if (QUALITY_OPTIMIZED.equals(quality) && bitRate != OPTIMIZED_BITRATE) {
+            bitRate = OPTIMIZED_BITRATE;
+            setAudioBitRate(bitRate);
+        }
+        
+        return bitRate;
+    }
+
+    /**
+     * Sets and persists the audio bit rate.
+     * 
+     * @param bitRate the bit rate to use
+     */
+    public void setAudioBitRate(int bitRate) {
+        this.audioBitRate = bitRate;
+        prefs.putInt(PREF_AUDIO_BITRATE, bitRate);
+    }
+
+    /**
+     * Gets the sampling rate based on the current audio quality setting.
+     * 
+     * @return the sampling rate in Hz
+     */
+    public int getAudioSamplingRate() {
+        // Ensure the audio quality preference is respected
+        String quality = getAudioQuality();
+        
+        // Default to the stored sampling rate
+        int samplingRate = prefs.getInt(PREF_AUDIO_SAMPLINGRATE, DEFAULT_SAMPLINGRATE);
+        
+        // Override if quality setting doesn't match stored sampling rate
+        if (QUALITY_BEST.equals(quality) && samplingRate != BEST_SAMPLINGRATE) {
+            samplingRate = BEST_SAMPLINGRATE;
+            setAudioSamplingRate(samplingRate);
+        } else if (QUALITY_OPTIMIZED.equals(quality) && samplingRate != OPTIMIZED_SAMPLINGRATE) {
+            samplingRate = OPTIMIZED_SAMPLINGRATE;
+            setAudioSamplingRate(samplingRate);
+        }
+        
+        return samplingRate;
+    }
+
+    /**
+     * Sets and persists the audio sampling rate.
+     * 
+     * @param samplingRate the sampling rate to use
+     */
+    public void setAudioSamplingRate(int samplingRate) {
+        this.audioSamplingRate = samplingRate;
+        prefs.putInt(PREF_AUDIO_SAMPLINGRATE, samplingRate);
     }
 }

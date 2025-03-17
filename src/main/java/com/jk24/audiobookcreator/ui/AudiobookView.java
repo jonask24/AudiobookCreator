@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -58,6 +59,7 @@ public class AudiobookView extends VBox {
     private Button addImageButton;
     private List<File> imageFiles = new ArrayList<>();
     private int currentImageIndex = 0;
+    private Consumer<List<BookAudio>> audioFilesChangedListener;
 
     /**
      * Creates a new audiobook view for the specified audiobook.
@@ -201,6 +203,7 @@ public class AudiobookView extends VBox {
             if (autoSortFiles) {
                 sortFilesByName();
             }
+            notifyAudioFilesChanged();
         });
     }
 
@@ -259,6 +262,7 @@ public class AudiobookView extends VBox {
             if (!observableAudioFiles.isEmpty()) {
                 searchForImages(observableAudioFiles.get(0).getFile());
             }
+            notifyAudioFilesChanged();
         }
     }
 
@@ -281,6 +285,7 @@ public class AudiobookView extends VBox {
 
         // Clear selection after removing
         fileListView.getSelectionModel().clearSelection();
+        notifyAudioFilesChanged();
    }
 
     /**
@@ -297,6 +302,7 @@ public class AudiobookView extends VBox {
                 observableAudioFiles.add(index - 1, selectedItem);
                 fileListView.getSelectionModel().select(index - 1);
                 fileListView.scrollTo(index - 1);
+                notifyAudioFilesChanged();
             }
         }
     }
@@ -315,6 +321,7 @@ public class AudiobookView extends VBox {
                 observableAudioFiles.add(index + 1, selectedItem);
                 fileListView.getSelectionModel().select(index + 1);
                 fileListView.scrollTo(index + 1);
+                notifyAudioFilesChanged();
             }
         }
     }
@@ -449,6 +456,7 @@ public class AudiobookView extends VBox {
            }
 
            System.out.println("Sorted " + sortedFiles.size() + " audio files by filename");
+           notifyAudioFilesChanged();
        }
     }
 
@@ -756,5 +764,23 @@ public class AudiobookView extends VBox {
             return imageFiles.get(currentImageIndex);
         }
         return null;
+    }
+
+    /**
+     * Sets a listener to be notified when audio files are added, removed, or reordered.
+     * 
+     * @param listener Consumer that receives the updated list of audio files
+     */
+    public void setOnAudioFilesChanged(Consumer<List<BookAudio>> listener) {
+        this.audioFilesChangedListener = listener;
+    }
+
+    /**
+     * Notifies the registered listener about changes to the audio files.
+     */
+    private void notifyAudioFilesChanged() {
+        if (audioFilesChangedListener != null) {
+            audioFilesChangedListener.accept(audiobook.getAudioFiles());
+        }
     }
 }

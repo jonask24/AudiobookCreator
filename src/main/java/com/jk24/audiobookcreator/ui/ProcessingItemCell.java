@@ -50,7 +50,7 @@ public class ProcessingItemCell extends ListCell<ProcessingItem> {
         fileInfoBox.getChildren().addAll(filename, statusLabel);
         
         progressBar = new ProgressBar(0);
-        progressBar.setPrefWidth(180); // Make progress bar wider
+        progressBar.setPrefWidth(100); // Make progress bar wider
         progressBar.setPrefHeight(16); // Set consistent height
         progressBar.getStyleClass().add("blue-bar"); // Add a special style class
         
